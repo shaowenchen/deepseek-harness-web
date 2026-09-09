@@ -52,9 +52,13 @@ ARG DSH_VERSION=0.1.2-rc.1
 RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
     && npm cache clean --force
 
+# pnpm is required by `dsh plugin` (used to install the dshmarket bundle at boot).
+RUN npm install --global pnpm@9 \
+    && npm cache clean --force
+
 COPY dsh/cordis.patch.yml /opt/dsh-web/cordis.patch.yml
-COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/sync-workspace.sh scripts/s3-sync.mjs /opt/dsh-web/
-RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh /opt/dsh-web/sync-workspace.sh \
+COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/sync-workspace.sh scripts/s3-sync.mjs scripts/install-market.sh /opt/dsh-web/
+RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh /opt/dsh-web/sync-workspace.sh /opt/dsh-web/install-market.sh \
     && mkdir -p /dsh /root \
     && cp /opt/dsh-web/cordis.patch.yml /dsh/cordis.patch.yml
 
