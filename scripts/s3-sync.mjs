@@ -12,7 +12,7 @@
 //            download remote objects that are new/changed vs local
 //   exit : final upload pass (SIGTERM/SIGINT via process handlers)
 import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { readdir, stat, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readdir, stat, readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
@@ -131,13 +131,21 @@ async function pull(key, remoteMeta) {
   for await (const chunk of get.Body) chunks.push(chunk);
   const buf = Buffer.concat(chunks);
   await ensureLocalDir(key);
-  await writeFile(join(workspace, ...keyToLocal(key).split('/')), buf);
+  const dest = join(workspace, ...keyToLocal(key).split('/'));
+  await writeFile(dest, buf);
+  // Restore the original mode recorded at upload (metadata dsh-mode).
+  const modeStr = get.Metadata?.['dsh-mode'];
+  if (modeStr && /^0?[0-7]{3,4}$/.test(modeStr)) {
+    try { await chmod(dest, parseInt(modeStr, 8)); } catch { /* ignore */ }
+  }
   return buf.length;
 }
 
 async function push(key, localPath) {
   const data = await readFile(localPath);
-  await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: data }));
+  const st = await stat(localPath).catch(() => null);
+  const metadata = st ? { 'dsh-mode': (st.mode & 0o777).toString(8) } : undefined;
+  await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: data, Metadata: metadata }));
 }
 
 async function removeRemote(key) {
