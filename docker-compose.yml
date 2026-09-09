@@ -8,6 +8,7 @@ services:
       - "${PORT:-3080}:3080"
     environment:
       DEEPSEEK_API_KEY: ${API_KEY:?set API_KEY in .env}
+      TRUSTED_HOST: ${TRUSTED_HOST:-}
       DSH_TELEMETRY_DISABLED: "1"
     volumes:
       - ./data:/dsh
