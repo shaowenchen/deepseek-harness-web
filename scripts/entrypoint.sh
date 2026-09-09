@@ -20,8 +20,8 @@ if [ -z "${BASE_URL:-}" ] && [ -n "${API_KEY:-}" ] && [ -z "${DEEPSEEK_API_KEY:-
   export DEEPSEEK_API_KEY="$API_KEY"
 fi
 
-# Optional: persist /workspace to S3 via s3fs mount or Node SDK sync (sets EXIT
-# trap; do not exec before dsh).
+# Optional: persist /workspace to S3 via Node SDK sync (sets EXIT trap; do not
+# exec before dsh).
 # shellcheck source=/dev/null
 . /opt/dsh-web/sync-workspace.sh
 
@@ -54,8 +54,8 @@ while [ "$i" -le "$n" ]; do
   i=$((i + 1))
 done
 
-# Use plain exec when no S3 sync/mount; otherwise run in foreground so EXIT
-# trap fires (unmount or final sync back to S3).
+# Use plain exec when no S3 sync; otherwise run in foreground so the EXIT trap
+# fires and the sync daemon does its final upload pass.
 if [ -n "${S3_BUCKET:-}" ]; then
   "$@"
   exit $?

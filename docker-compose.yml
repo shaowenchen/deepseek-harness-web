@@ -14,26 +14,17 @@ services:
       BASE_URL: ${BASE_URL:-}
       MODEL: ${MODEL:-}
       TRUSTED_HOST: ${TRUSTED_HOST:-}
-      # Optional S3 / S3-compatible workspace: s3fs mount when FUSE is available,
-      # else Node SDK sync (@aws-sdk/client-s3, no FUSE needed; works on Railway).
+      # Optional S3 / S3-compatible workspace: Node SDK sync (@aws-sdk/client-s3,
+      # no FUSE needed; works on Railway). Default is virtual-host style (0).
       S3_BUCKET: ${S3_BUCKET:-}
       S3_PATH: ${S3_PATH:-}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-}
-      S3_PATH_STYLE: ${S3_PATH_STYLE:-1}
+      S3_PATH_STYLE: ${S3_PATH_STYLE:-0}
       S3_REGION: ${S3_REGION:-}
-      SYNC_INTERVAL: ${SYNC_INTERVAL:-30}
       DSH_TELEMETRY_DISABLED: "1"
     volumes:
       - ./data:/dsh
-      # Local fallback workspace; used by sync mode (or s3fs covers it when mounted).
+      # Local fallback workspace; synced to S3 when S3_BUCKET is set.
       - ./workspace:/workspace
-    # FUSE privileges for s3fs mount mode (ignored on platforms without /dev/fuse,
-    # where the script automatically falls back to Node SDK sync).
-    devices:
-      - /dev/fuse:/dev/fuse
-    cap_add:
-      - SYS_ADMIN
-    security_opt:
-      - apparmor:unconfined

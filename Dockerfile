@@ -24,17 +24,11 @@ RUN apt-get update \
       openssh-client \
       procps \
       python3 \
-      s3fs \
       tar \
       unzip \
-      util-linux \
       vim-tiny \
       wget \
       xz-utils \
-    && if [ -f /etc/fuse.conf ]; then \
-         sed -i 's/^#[[:space:]]*user_allow_other/user_allow_other/' /etc/fuse.conf; \
-         grep -q '^user_allow_other' /etc/fuse.conf || echo user_allow_other >> /etc/fuse.conf; \
-       fi \
     && ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
          amd64) NODE_ARCH=x64 ;; \
@@ -48,8 +42,9 @@ RUN apt-get update \
 
 # AWS SDK for the Node S3 sync daemon (s3-sync.mjs). KS3 works with these
 # @aws-sdk/client-s3 client params; rclone's generic S3 driver does not.
+ARG AWS_SDK_S3_VERSION=3.1107.0
 RUN mkdir -p /opt/dsh-web \
-    && npm install --prefix /opt/dsh-web @aws-sdk/client-s3@3 --omit=dev \
+    && npm install --prefix /opt/dsh-web @aws-sdk/client-s3@${AWS_SDK_S3_VERSION} --omit=dev \
     && rm -rf /opt/dsh-web/node_modules/.cache
 
 WORKDIR /workspace
