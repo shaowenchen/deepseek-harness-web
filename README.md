@@ -57,3 +57,5 @@ volumes:
 ```bash
 make up / make logs / make down / make clean
 ```
+
+镜像由 CI 推送到 `ghcr.io/shaowenchen/deepseek-harness-web`（`latest` / `master` / `sha-*`）。
