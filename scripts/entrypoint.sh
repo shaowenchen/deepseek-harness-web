@@ -20,9 +20,9 @@ if [ -z "${BASE_URL:-}" ] && [ -n "${API_KEY:-}" ] && [ -z "${DEEPSEEK_API_KEY:-
   export DEEPSEEK_API_KEY="$API_KEY"
 fi
 
-# Optional: persist /workspace via s3fs (sets EXIT trap; do not exec before dsh).
+# Optional: persist /workspace to S3 via rclone sync (sets EXIT trap; do not exec before dsh).
 # shellcheck source=/dev/null
-. /opt/dsh-web/mount-workspace.sh
+. /opt/dsh-web/sync-workspace.sh
 
 # Preserve Docker CMD args (e.g. --port 3080).
 n=$#
@@ -53,7 +53,7 @@ while [ "$i" -le "$n" ]; do
   i=$((i + 1))
 done
 
-# Use plain exec when no s3fs trap; otherwise run in foreground so EXIT unmounts.
+# Use plain exec when no rclone sync loop; otherwise run in foreground so EXIT syncs back.
 if [ -n "${S3_BUCKET:-}" ]; then
   "$@"
   exit $?

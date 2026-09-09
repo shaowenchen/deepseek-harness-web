@@ -14,7 +14,8 @@ services:
       BASE_URL: ${BASE_URL:-}
       MODEL: ${MODEL:-}
       TRUSTED_HOST: ${TRUSTED_HOST:-}
-      # Optional S3 / S3-compatible workspace (s3fs → /workspace).
+      # Optional S3 / S3-compatible workspace: s3fs mount when FUSE is available,
+      # else rclone sync (no FUSE needed; works on Railway too).
       S3_BUCKET: ${S3_BUCKET:-}
       S3_PATH: ${S3_PATH:-}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
@@ -22,11 +23,14 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-}
       S3_PATH_STYLE: ${S3_PATH_STYLE:-1}
       S3_REGION: ${S3_REGION:-}
+      SYNC_INTERVAL: ${SYNC_INTERVAL:-30}
       DSH_TELEMETRY_DISABLED: "1"
     volumes:
       - ./data:/dsh
-      # Local fallback mountpoint; covered by s3fs when S3_BUCKET is set.
+      # Local fallback workspace; used by sync mode (or s3fs covers it when mounted).
       - ./workspace:/workspace
+    # FUSE privileges for s3fs mount mode (ignored on platforms without /dev/fuse,
+    # where the script automatically falls back to rclone sync).
     devices:
       - /dev/fuse:/dev/fuse
     cap_add:

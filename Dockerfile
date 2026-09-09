@@ -46,6 +46,16 @@ RUN apt-get update \
     && node -v && npm -v \
     && rm -rf /var/lib/apt/lists/*
 
+# rclone for optional S3 workspace sync (no FUSE needed; runs on Railway etc).
+RUN ARCH="$(dpkg --print-architecture)" \
+    && curl -fsSL "https://downloads.rclone.org/rclone-current-linux-${ARCH}.zip" \
+         -o /tmp/rclone.zip \
+    && unzip /tmp/rclone.zip -d /tmp/rclone \
+    && cp "/tmp/rclone/$(ls /tmp/rclone | grep '^rclone-')/rclone" /usr/local/bin/rclone \
+    && chmod +x /usr/local/bin/rclone \
+    && rclone version \
+    && rm -rf /tmp/rclone /tmp/rclone.zip
+
 WORKDIR /workspace
 
 ARG DSH_VERSION=0.1.2-rc.1
@@ -53,8 +63,8 @@ RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
     && npm cache clean --force
 
 COPY dsh/cordis.patch.yml /opt/dsh-web/cordis.patch.yml
-COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/mount-workspace.sh /opt/dsh-web/
-RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh /opt/dsh-web/mount-workspace.sh \
+COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/sync-workspace.sh /opt/dsh-web/
+RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh /opt/dsh-web/sync-workspace.sh \
     && mkdir -p /dsh /workspace \
     && cp /opt/dsh-web/cordis.patch.yml /dsh/cordis.patch.yml
 

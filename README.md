@@ -27,24 +27,26 @@ https://chat.example.com:8443/?token=日志里的token
 | `MODEL` | `BASE_URL` 有值时必填 | 空 | 自定义模型 id |
 | `PORT` | 否 | `3080` | 容器映射到宿主机的端口 |
 | `TRUSTED_HOST` | 域名访问时建议设 | 空 | 传给 `--trusted-host`，如 `chat.example.com` 或 `chat.example.com:8443` |
-| `S3_BUCKET` | 否 | 空 | 设置后用 s3fs 把桶挂到 `/workspace` |
+| `S3_BUCKET` | 否 | 空 | 设置后把桶同步到 `/workspace`：优先 s3fs 挂载，无 FUSE 时自动降级 rclone 同步 |
 | `S3_PATH` | 否 | 空 | 桶内子路径 |
 | `S3_ENDPOINT` | `S3_BUCKET` 有值时必填 | 空 | S3 endpoint，如 `https://s3.example.com` |
 | `S3_ACCESS_KEY` | 同上 | 空 | Access Key |
 | `S3_SECRET_KEY` | 同上 | 空 | Secret Key |
 | `S3_PATH_STYLE` | 否 | `1` | `1` 启用 path-style（MinIO / 多数兼容盘） |
 | `S3_REGION` | 否 | 空 | 可选 region |
+| `SYNC_INTERVAL` | 否 | `30` | rclone 回传间隔（秒） |
 
 不设 `BASE_URL` 时走官方 DeepSeek（`API_KEY` → `DEEPSEEK_API_KEY`）。  
 设了 `BASE_URL` + `MODEL` 时写入 `data/settings.yaml` 的 `llm-pi-ai` 自定义路由，并设为默认模型。
 
-设了 `S3_BUCKET` 时，容器启动用 s3fs 挂载到 `/workspace`（需要 `/dev/fuse` + `SYS_ADMIN`，compose 已配置）。
+设了 `S3_BUCKET` 时，容器启动会**优先用 s3fs 挂载**桶到 `/workspace`（实时文件系统，需要宿主机有 `/dev/fuse` + `SYS_ADMIN`，compose 已配置）。  
+**如果 FUSE 不可用**（如 Railway、macOS Docker Desktop），脚本自动降级为 **rclone 同步**：启动拉取桶内容到 `/workspace`，并按 `SYNC_INTERVAL` 定时双向回传（无需 FUSE，任何容器平台都能跑）。
 
 ## 目录
 
 | 宿主机 | 容器 |
 |---|---|
 | `./data` | `/dsh` |
-| `./workspace` | `/workspace`（未配 S3 时）；配了 S3 时被 s3fs 覆盖 |
+| `./workspace` | `/workspace`（未配 S3 时）；配了 S3 时：s3fs 挂载 或 rclone 同步的本地目录 |
 
 镜像：`shaowenchen/deepseek-harness-web:latest`
