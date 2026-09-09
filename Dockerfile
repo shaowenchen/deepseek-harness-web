@@ -3,7 +3,7 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
     DSH_HOME=/dsh \
-    DSH_WORKSPACE=/workspace \
+    DSH_WORKSPACE=/root \
     DSH_TELEMETRY_DISABLED=1
 
 # General-purpose base tools + Node 24 (official tarball).
@@ -47,7 +47,7 @@ RUN mkdir -p /opt/dsh-web \
     && npm install --prefix /opt/dsh-web @aws-sdk/client-s3@${AWS_SDK_S3_VERSION} --omit=dev \
     && rm -rf /opt/dsh-web/node_modules/.cache
 
-WORKDIR /workspace
+WORKDIR /root
 
 ARG DSH_VERSION=0.1.2-rc.1
 RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
@@ -56,7 +56,7 @@ RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
 COPY dsh/cordis.patch.yml /opt/dsh-web/cordis.patch.yml
 COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/sync-workspace.sh scripts/s3-sync.mjs /opt/dsh-web/
 RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh /opt/dsh-web/sync-workspace.sh \
-    && mkdir -p /dsh /workspace \
+    && mkdir -p /dsh /root \
     && cp /opt/dsh-web/cordis.patch.yml /dsh/cordis.patch.yml
 
 EXPOSE 3080

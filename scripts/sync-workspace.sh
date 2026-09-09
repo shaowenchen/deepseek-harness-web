@@ -8,7 +8,7 @@
 # Optional: S3_PATH, S3_REGION
 set -eu
 
-workspace="${DSH_WORKSPACE:-/workspace}"
+workspace="${DSH_WORKSPACE:-/root}"
 
 if [ -z "${S3_BUCKET:-}" ]; then
   return 0 2>/dev/null || exit 0

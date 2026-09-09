@@ -26,5 +26,5 @@ services:
       DSH_TELEMETRY_DISABLED: "1"
     volumes:
       - ./data:/dsh
-      # Local fallback workspace; synced to S3 when S3_BUCKET is set.
-      - ./workspace:/workspace
+      # Workspace = container HOME (/root); synced to S3 when S3_BUCKET is set.
+      - ./workspace:/root

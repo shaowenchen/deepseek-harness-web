@@ -15,7 +15,7 @@ import { readdir, stat, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-const workspace = process.env.DSH_WORKSPACE || '/workspace';
+const workspace = process.env.DSH_WORKSPACE || '/root';
 const bucket = process.env.S3_BUCKET || '';
 const prefix = String(process.env.S3_PATH || '').replace(/^\/+|\/+$/g, '');
 const endpoint = (process.env.S3_ENDPOINT || '').trim().replace(/\/+$/, '');

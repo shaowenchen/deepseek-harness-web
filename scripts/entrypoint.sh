@@ -20,19 +20,19 @@ if [ -z "${BASE_URL:-}" ] && [ -n "${API_KEY:-}" ] && [ -z "${DEEPSEEK_API_KEY:-
   export DEEPSEEK_API_KEY="$API_KEY"
 fi
 
-# Optional: persist /workspace to S3 via Node SDK sync (sets EXIT trap; do not
-# exec before dsh).
+# Optional: persist /root (workspace) to S3 via Node SDK sync (sets EXIT trap;
+# do not exec before dsh).
 # shellcheck source=/dev/null
 . /opt/dsh-web/sync-workspace.sh
 
 # Seed a default workspace directory so the first-run directory picker in the
 # web UI has a ready option. Skipped when S3 is configured (the sync daemon
-# owns /workspace). Override the name with WORKSPACE_DIR.
+# owns /root). Override the name with WORKSPACE_DIR.
 if [ -z "${S3_BUCKET:-}" ]; then
   default_ws="${WORKSPACE_DIR:-default}"
   case "$default_ws" in
     /?*) ws_path="$default_ws" ;;
-    *)   ws_path="${DSH_WORKSPACE:-/workspace}/$default_ws" ;;
+    *)   ws_path="${DSH_WORKSPACE:-/root}/$default_ws" ;;
   esac
   mkdir -p "$ws_path"
 fi
