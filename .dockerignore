@@ -1,0 +1,12 @@
+# keep the image lean — only what the build needs
+node_modules
+npm-debug.log*
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+docker-compose.yml
+.dockerignore
+Dockerfile

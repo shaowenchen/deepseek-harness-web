@@ -1,0 +1,51 @@
+# docker compose up -d   -> starts dsh web on http://localhost:3080
+#
+# Deploy-style configuration: environment variables drive the model settings,
+# a named volume persists session data, and the port is published.
+
+services:
+  dsh-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: deepseek-harness-web:local
+    container_name: dsh-web
+    restart: unless-stopped
+
+    # Expose the web UI on all host interfaces.
+    ports:
+      - "${DSH_WEB_PORT:-3080}:3080"
+
+    # Model & runtime configuration — all driven by environment variables.
+    # Copy `.env.example` to `.env` and fill in the real values.
+    environment:
+      # ── model (DeepSeek official API) ──────────────────────────────────────
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?set DEEPSEEK_API_KEY in .env}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      # reasoning effort: off | low | high | max  (adapter default: high)
+      # DSH_LLM_REASONING_EFFORT: ${DSH_LLM_REASONING_EFFORT:-high}
+      # DSH_LLM_MAX_TOKENS: ${DSH_LLM_MAX_TOKENS:-256000}
+
+      # ── agent / permission mode ────────────────────────────────────────────
+      # read-only | workspace-write | danger-full-access
+      DSH_PERMISSION_MODE: ${DSH_PERMISSION_MODE:-workspace-write}
+
+      # ── web surface ────────────────────────────────────────────────────────
+      # DSH_WEB_PORT: ${DSH_WEB_PORT:-3080}   # host publish port (see ports:)
+      # DSH_TRUSTED_HOST: ${DSH_TRUSTED_HOST:-} # extra browser-trust authority
+
+      # ── telemetry ──────────────────────────────────────────────────────────
+      DSH_TELEMETRY_DISABLED: "1"
+
+    # Persist all dsh user data (sessions, settings, credentials, storages).
+    volumes:
+      - dsh-data:/dsh
+      # Optionally mount a host workspace directory the agent can read/write:
+      # - ./workspace:/workspace
+
+    # Optional: expose only on the loopback for local-only access
+    # ports:
+    #   - "127.0.0.1:${DSH_WEB_PORT:-3080}:3080"
+
+volumes:
+  dsh-data:
