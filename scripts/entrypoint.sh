@@ -25,6 +25,18 @@ fi
 # shellcheck source=/dev/null
 . /opt/dsh-web/sync-workspace.sh
 
+# Seed a default workspace directory so the first-run directory picker in the
+# web UI has a ready option. Skipped when S3 is configured (the sync daemon
+# owns /workspace). Override the name with WORKSPACE_DIR.
+if [ -z "${S3_BUCKET:-}" ]; then
+  default_ws="${WORKSPACE_DIR:-default}"
+  case "$default_ws" in
+    /?*) ws_path="$default_ws" ;;
+    *)   ws_path="${DSH_WORKSPACE:-/workspace}/$default_ws" ;;
+  esac
+  mkdir -p "$ws_path"
+fi
+
 # Preserve Docker CMD args (e.g. --port 3080).
 n=$#
 i=1
