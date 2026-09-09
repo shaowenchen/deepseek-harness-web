@@ -24,11 +24,17 @@ RUN apt-get update \
       openssh-client \
       procps \
       python3 \
+      s3fs \
       tar \
       unzip \
+      util-linux \
       vim-tiny \
       wget \
       xz-utils \
+    && if [ -f /etc/fuse.conf ]; then \
+         sed -i 's/^#[[:space:]]*user_allow_other/user_allow_other/' /etc/fuse.conf; \
+         grep -q '^user_allow_other' /etc/fuse.conf || echo user_allow_other >> /etc/fuse.conf; \
+       fi \
     && ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
          amd64) NODE_ARCH=x64 ;; \
@@ -47,8 +53,8 @@ RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
     && npm cache clean --force
 
 COPY dsh/cordis.patch.yml /opt/dsh-web/cordis.patch.yml
-COPY scripts/entrypoint.sh scripts/sync-provider.sh /opt/dsh-web/
-RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh \
+COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/mount-workspace.sh /opt/dsh-web/
+RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh /opt/dsh-web/mount-workspace.sh \
     && mkdir -p /dsh /workspace \
     && cp /opt/dsh-web/cordis.patch.yml /dsh/cordis.patch.yml
 

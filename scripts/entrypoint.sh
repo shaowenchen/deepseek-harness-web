@@ -20,6 +20,10 @@ if [ -z "${BASE_URL:-}" ] && [ -n "${API_KEY:-}" ] && [ -z "${DEEPSEEK_API_KEY:-
   export DEEPSEEK_API_KEY="$API_KEY"
 fi
 
+# Optional: persist /workspace via s3fs (sets EXIT trap; do not exec before dsh).
+# shellcheck source=/dev/null
+. /opt/dsh-web/mount-workspace.sh
+
 # Preserve Docker CMD args (e.g. --port 3080).
 n=$#
 i=1
@@ -48,5 +52,11 @@ while [ "$i" -le "$n" ]; do
   eval "set -- \"\$@\" \"\$CMD_$i\""
   i=$((i + 1))
 done
+
+# Use plain exec when no s3fs trap; otherwise run in foreground so EXIT unmounts.
+if [ -n "${S3_BUCKET:-}" ]; then
+  "$@"
+  exit $?
+fi
 
 exec "$@"
