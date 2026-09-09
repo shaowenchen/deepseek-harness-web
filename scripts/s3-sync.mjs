@@ -23,6 +23,12 @@ const region = (process.env.S3_REGION || '').trim() || 'us-east-1';
 const accessKey = (process.env.S3_ACCESS_KEY || '').trim();
 const secretKey = (process.env.S3_SECRET_KEY || '').trim();
 const debounceMs = 500;
+const isDebug = (process.env.LOG_LEVEL || '').toLowerCase() === 'debug';
+
+// Debug-only logging: per-file sync details (which file, which direction).
+function dbg(...args) {
+  if (isDebug) console.log('s3-sync: [debug]', ...args);
+}
 
 if (!bucket || !endpoint || !accessKey || !secretKey) {
   console.error('s3-sync: missing required env (S3_BUCKET/S3_ENDPOINT/S3_ACCESS_KEY/S3_SECRET_KEY)');
@@ -124,6 +130,7 @@ async function syncOnce() {
       try {
         await push(key, join(workspace, ...keyToLocal(key).split('/')));
         up++;
+        dbg(`upload ${key} (${keyToLocal(key)}) -> s3://${bucket}/${key}`);
       } catch (e) {
         console.error(`s3-sync: push ${key} failed: ${e.message}`);
       }
@@ -137,6 +144,7 @@ async function syncOnce() {
       try {
         await pull(key, r);
         down++;
+        dbg(`download s3://${bucket}/${key} -> ${join(workspace, ...keyToLocal(key).split('/'))}`);
       } catch (e) {
         console.error(`s3-sync: pull ${key} failed: ${e.message}`);
       }
@@ -146,7 +154,11 @@ async function syncOnce() {
   // Delete remote objects that no longer exist locally.
   for (const key of remote.keys()) {
     if (!local.has(key)) {
-      try { await removeRemote(key); del++; }
+      try {
+        await removeRemote(key);
+        del++;
+        dbg(`delete s3://${bucket}/${key} (local removed ${keyToLocal(key)})`);
+      }
       catch (e) { console.error(`s3-sync: delete ${key} failed: ${e.message}`); }
     }
   }
@@ -160,7 +172,11 @@ async function main() {
   const remote = await listRemote();
   let pulled = 0;
   for (const [key] of remote) {
-    try { await pull(key); pulled++; }
+    try {
+      await pull(key);
+      pulled++;
+      dbg(`boot download s3://${bucket}/${key} -> ${join(workspace, ...keyToLocal(key).split('/'))}`);
+    }
     catch (e) { console.error(`s3-sync: boot pull ${key} failed: ${e.message}`); }
   }
   console.log(`s3-sync: boot pull complete (${pulled} objects)`);
