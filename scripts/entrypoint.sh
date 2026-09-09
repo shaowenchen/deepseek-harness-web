@@ -1,8 +1,15 @@
 #!/bin/sh
 set -eu
 
+# Owner-only umask so dsh-created secrets (.credentials.yaml etc.) are 0600,
+# which dsh-credentials-local enforces on load.
+umask 077
+
 mkdir -p "$DSH_HOME" /root
 cp /opt/dsh-web/cordis.patch.yml "$DSH_HOME/cordis.patch.yml"
+
+# Harden any existing sensitive files (dsh refuses 0644 credentials).
+chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/.env" 2>/dev/null || true
 
 # Drop leftover auth-gate from older images if present.
 rm -rf "$DSH_HOME/profiles/web/node_modules/dsh-auth-gate"
