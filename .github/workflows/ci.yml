@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t deepseek-harness-web:ci .
+
+      - name: Smoke test container startup
+        env:
+          DEEPSEEK_API_KEY: test-key-for-ci
+        run: |
+          docker run -d --name dsh-web-ci \
+            -e DEEPSEEK_API_KEY \
+            -p 13080:3080 \
+            deepseek-harness-web:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:13080/ >/dev/null 2>&1; then
+              echo "dsh web is responding"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Timed out waiting for dsh web"
+          docker logs dsh-web-ci
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f dsh-web-ci 2>/dev/null || true

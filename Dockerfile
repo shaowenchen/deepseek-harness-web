@@ -41,13 +41,26 @@ RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
 # See ./dsh/cordis.patch.yml.
 COPY dsh/cordis.patch.yml /dsh/cordis.patch.yml
 
+# Entrypoint helpers: env -> CLI flags / settings.yaml sync.
+COPY scripts/entrypoint.sh scripts/sync-llm-settings.py /opt/dsh-web/
+RUN chmod +x /opt/dsh-web/entrypoint.sh
+
+# Run as the non-root node user; ensure writable runtime dirs.
+RUN mkdir -p /dsh /workspace \
+    && chown -R node:node /dsh /workspace /opt/dsh-web
+USER node
+
 # The web UI reaches browsers over the LAN/container network.
 EXPOSE 3080
 
 # `--no-open` keeps the container from trying to open a browser.
 # Telemetry is disabled in the image by default (override via compose env).
 ENV DSH_TELEMETRY_DISABLED=1
-ENTRYPOINT ["dsh", "--profile", "web", "--no-open"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:3080/" >/dev/null || exit 1
+
+ENTRYPOINT ["/opt/dsh-web/entrypoint.sh"]
 
 # Bind host/port come from the patch; `--port` can still be overridden.
 CMD ["--port", "3080"]

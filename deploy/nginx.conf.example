@@ -1,0 +1,39 @@
+# Example nginx reverse proxy for dsh web.
+#
+# Usage:
+#   1. Replace chat.example.com with your domain.
+#   2. Set DSH_TRUSTED_HOST=chat.example.com in .env
+#   3. Put TLS certs on the host and adjust ssl_certificate paths.
+#   4. Point upstream to the compose service (host port 3080 by default).
+
+upstream dsh_web {
+    server 127.0.0.1:3080;
+    keepalive 32;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name chat.example.com;
+
+    ssl_certificate     /etc/ssl/certs/chat.example.com.fullchain.pem;
+    ssl_certificate_key /etc/ssl/private/chat.example.com.key;
+
+    # Required: preserve the browser-visible Host for dsh's trust fence.
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    location / {
+        proxy_pass http://dsh_web;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+}
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}

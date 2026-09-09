@@ -22,17 +22,19 @@ services:
       # ── model (DeepSeek official API) ──────────────────────────────────────
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?set DEEPSEEK_API_KEY in .env}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      # reasoning effort: off | low | high | max  (adapter default: high)
-      # DSH_LLM_REASONING_EFFORT: ${DSH_LLM_REASONING_EFFORT:-high}
-      # DSH_LLM_MAX_TOKENS: ${DSH_LLM_MAX_TOKENS:-256000}
+      # Optional secret file mount (see README); ignored when DEEPSEEK_API_KEY is set.
+      DEEPSEEK_API_KEY_FILE: ${DEEPSEEK_API_KEY_FILE:-}
+      DSH_LLM_REASONING_EFFORT: ${DSH_LLM_REASONING_EFFORT:-high}
+      DSH_LLM_MAX_TOKENS: ${DSH_LLM_MAX_TOKENS:-256000}
 
       # ── agent / permission mode ────────────────────────────────────────────
       # read-only | workspace-write | danger-full-access
       DSH_PERMISSION_MODE: ${DSH_PERMISSION_MODE:-workspace-write}
 
       # ── web surface ────────────────────────────────────────────────────────
-      # DSH_WEB_PORT: ${DSH_WEB_PORT:-3080}   # host publish port (see ports:)
-      # DSH_TRUSTED_HOST: ${DSH_TRUSTED_HOST:-} # extra browser-trust authority
+      # Comma-separated host[:port] values for reverse-proxy deployments.
+      DSH_TRUSTED_HOST: ${DSH_TRUSTED_HOST:-}
+      DSH_TRUSTED_HOSTS: ${DSH_TRUSTED_HOSTS:-}
 
       # ── telemetry ──────────────────────────────────────────────────────────
       DSH_TELEMETRY_DISABLED: "1"
@@ -42,6 +44,13 @@ services:
       - dsh-data:/dsh
       # Optionally mount a host workspace directory the agent can read/write:
       # - ./workspace:/workspace
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
 
     # Optional: expose only on the loopback for local-only access
     # ports:

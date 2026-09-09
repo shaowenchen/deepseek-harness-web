@@ -8,7 +8,13 @@
 deepseek-harness-web/
 ├── Dockerfile              # 容器镜像：Node 24 + dsh CLI
 ├── docker-compose.yml      # 部署编排：端口暴露 / 环境变量 / 数据卷
+├── Makefile                # 常用 compose 命令快捷方式
 ├── .env.example            # 模型相关环境变量模板
+├── scripts/
+│   ├── entrypoint.sh       # 启动脚本：env → CLI / settings 同步
+│   └── sync-llm-settings.py
+├── deploy/
+│   └── nginx.conf.example  # 反向代理示例（HTTPS + WebSocket）
 ├── dsh/
 │   └── cordis.patch.yml    # 部署补丁：让 web 服务监听 0.0.0.0（见下）
 └── README.md
@@ -38,12 +44,14 @@ open http://localhost:3080
 | 变量 | 必填 | 默认值 | 说明 |
 |---|---|---|---|
 | `DEEPSEEK_API_KEY` | ✅ | — | DeepSeek API Key（在 `dsh-llm-deepseek` 适配器中按请求解析） |
+| `DEEPSEEK_API_KEY_FILE` | | — | 从挂载的 secret 文件读取 API Key（`DEEPSEEK_API_KEY` 为空时生效） |
 | `DEEPSEEK_BASE_URL` | | `https://api.deepseek.com` | API 端点；设了 `$DEEPSEEK_BASE_URL` 就优先生效，可用于 OpenAI 兼容网关 |
 | `DSH_PERMISSION_MODE` | | `workspace-write` | 权限模式：`read-only` / `workspace-write` / `danger-full-access` |
 | `DSH_WEB_PORT` | | `3080` | 宿主机暴露端口（容器内固定 3080） |
-| `DSH_TRUSTED_HOST` | | 空 | 额外允许的浏览器信任 authority（反代域名时用） |
-| `DSH_LLM_REASONING_EFFORT` | | `high` | 思考强度：`off` / `low` / `high` / `max` |
-| `DSH_LLM_MAX_TOKENS` | | `256000` | 单请求输出 token 上限 |
+| `DSH_TRUSTED_HOST` | | 空 | 单个额外允许的浏览器信任 authority（反代域名时用） |
+| `DSH_TRUSTED_HOSTS` | | 空 | 逗号分隔的 authority 列表；与 `DSH_TRUSTED_HOST` 二选一即可 |
+| `DSH_LLM_REASONING_EFFORT` | | `high` | 思考强度：`off` / `low` / `high` / `max`（写入 `$DSH_HOME/settings.yaml`） |
+| `DSH_LLM_MAX_TOKENS` | | `256000` | 单请求输出 token 上限（写入 `$DSH_HOME/settings.yaml`） |
 
 模型默认是 `deepseek-official` 路由下的 `deepseek-v4-flash`（快速）与
 `deepseek-v4-pro`（更强），Web 界面里可直接切换。
@@ -79,7 +87,8 @@ http://localhost:3080  →  https://chat.example.com
 ```
 
 如需让 `dsh web` 信任该域名（跨域 / Host 校验），在 `.env` 里设置
-`DSH_TRUSTED_HOST=chat.example.com`。⚠️ 反向代理必须保留 `Host` 头与 WebSocket
+`DSH_TRUSTED_HOST=chat.example.com`（或多个域名时用 `DSH_TRUSTED_HOSTS=a.example.com,b.example.com`）。
+完整 nginx 示例见 [`deploy/nginx.conf.example`](deploy/nginx.conf.example)。⚠️ 反向代理必须保留 `Host` 头与 WebSocket
 升级（`/api` 下的 SSE 流）。
 
 ## 高级用法
@@ -121,12 +130,22 @@ docker run -d --name dsh-web \
 ## 常用命令
 
 ```bash
-docker compose up -d --build   # 构建并启动
-docker compose logs -f dsh-web # 看日志（含启动 token URL）
-docker compose restart         # 重启
-docker compose down            # 停止（保留数据卷）
-docker compose down -v         # 停止并删除数据卷
+make up                          # 构建并启动（等价于 docker compose up -d --build）
+make logs                        # 看日志（含启动 token URL）
+make down                        # 停止（保留数据卷）
+make clean                       # 停止并删除数据卷
+
+docker compose up -d --build     # 构建并启动
+docker compose logs -f dsh-web   # 看日志（含启动 token URL）
+docker compose restart           # 重启
+docker compose down              # 停止（保留数据卷）
+docker compose down -v           # 停止并删除数据卷
 ```
+
+容器内置 healthcheck（`curl http://127.0.0.1:3080/`），`docker compose ps` 可查看 `healthy` 状态。
+
+> **注意**：`DSH_LLM_REASONING_EFFORT` / `DSH_LLM_MAX_TOKENS` 会在每次容器启动时同步到
+> `$DSH_HOME/settings.yaml`。若你在 Web UI 里改过模型设置，重启后会被环境变量覆盖。
 
 ## 参考
 
