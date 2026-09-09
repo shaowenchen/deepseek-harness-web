@@ -66,11 +66,42 @@ while [ "$i" -le "$n" ]; do
   i=$((i + 1))
 done
 
-# Use plain exec when no S3 sync; otherwise run in foreground so the EXIT trap
-# fires and the sync daemon does its final upload pass.
+# Restart dsh in a loop so plugin installs (which exit dsh) do not tear down
+# the container. PID 1 stays alive; SIGTERM/SIGINT forwards to the running dsh,
+# then the loop exits cleanly (S3 final sync runs on EXIT).
+stopping=0
+dsh_pid=0
+stop_now() {
+  stopping=1
+  # Forward the stop signal to the running dsh so it can shut down cleanly.
+  [ "$dsh_pid" -ne 0 ] && kill -TERM "$dsh_pid" 2>/dev/null || true
+}
+
 if [ -n "${S3_BUCKET:-}" ]; then
-  "$@"
-  exit $?
+  trap stop_now TERM INT
+  while [ "$stopping" -eq 0 ]; do
+    "$@" &
+    dsh_pid=$!
+    wait "$dsh_pid"
+    code=$?
+    dsh_pid=0
+    [ "$stopping" -eq 1 ] && break
+    echo "dsh exited (code $code); restarting in 2s..."
+    sleep 2
+  done
+  exit $code
 fi
 
-exec "$@"
+# No S3: still keep PID 1 alive across dsh restarts.
+trap stop_now TERM INT
+while [ "$stopping" -eq 0 ]; do
+  "$@" &
+  dsh_pid=$!
+  wait "$dsh_pid"
+  code=$?
+  dsh_pid=0
+  [ "$stopping" -eq 1 ] && break
+  echo "dsh exited (code $code); restarting in 2s..."
+  sleep 2
+done
+exit $code
