@@ -26,9 +26,9 @@ services:
       SYNC_EXCLUDE: ${SYNC_EXCLUDE:-.npm,.cache,.local,.config}
       WORKSPACE_DIR: ${WORKSPACE_DIR:-default}
       LOG_LEVEL: ${LOG_LEVEL:-}
-      # dshmarket plugin auto-install (0 to disable; override package name).
+      # Plugin auto-install (0 to disable; override package list).
       INSTALL_MARKET: ${INSTALL_MARKET:-1}
-      MARKET_PACKAGE: ${MARKET_PACKAGE:-dshmarket}
+      MARKET_PACKAGES: ${MARKET_PACKAGES:-dshmarket,dsh-file-explorer}
       DSH_TELEMETRY_DISABLED: "1"
     volumes:
       # Workspace + dsh config (.dsh) live under /root, all persisted via ./home.

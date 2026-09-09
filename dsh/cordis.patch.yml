@@ -5,3 +5,11 @@
     compression: gzip
     compressionLevel: 1
     compressionThresholdBytes: 1024
+# Plugins installed by install-market.sh; entries inserted so they load in the
+# web profile. dsh-market is a bundle (auto-loads), file-explorer is not.
+- insert:
+    - id: dsh-market
+      name: 'dshmarket'
+- insert:
+    - id: file-explorer
+      name: 'dsh-file-explorer'
