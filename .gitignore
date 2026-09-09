@@ -1,5 +1,5 @@
 .env
 data/
-workspace/
+home/
 __pycache__/
 *.pyc

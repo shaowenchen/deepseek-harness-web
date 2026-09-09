@@ -7,7 +7,7 @@ DeepSeek Harness 的 Web UI 容器化部署（支持 Railway）。
 ```bash
 cp .env.example .env
 # 编辑 .env，填入 API_KEY
-mkdir -p data workspace
+mkdir -p data home
 docker compose up -d --build
 docker compose logs -f dsh-web
 ```
@@ -59,6 +59,6 @@ docker compose logs -f dsh-web
 | 宿主机 | 容器 | 用途 |
 |---|---|---|
 | `./data` | `/dsh` | 配置与状态 |
-| `./workspace` | `/root`（root 用户 HOME） | 工作区 = 家目录（dsh 实际读写目录；配了 S3 时同步到桶） |
+| `./home` | `/root`（root 用户 HOME） | 工作区 = 家目录（dsh 实际读写目录；配了 S3 时同步到桶） |
 
 镜像：`shaowenchen/deepseek-harness-web:latest`

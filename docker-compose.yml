@@ -29,4 +29,4 @@ services:
     volumes:
       - ./data:/dsh
       # Workspace = container HOME (/root); synced to S3 when S3_BUCKET is set.
-      - ./workspace:/root
+      - ./home:/root
