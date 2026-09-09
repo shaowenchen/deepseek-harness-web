@@ -19,18 +19,22 @@ if [ -f "$DSH_HOME/.env" ]; then
   [ -s "$DSH_HOME/.env" ] || rm -f "$DSH_HOME/.env"
 fi
 
-# Custom OpenAI-compatible provider (BASE_URL + MODEL), or clear managed block.
-/opt/dsh-web/sync-provider.sh
-
 # Official DeepSeek route: only when not using a custom BASE_URL.
 if [ -z "${BASE_URL:-}" ] && [ -n "${API_KEY:-}" ] && [ -z "${DEEPSEEK_API_KEY:-}" ]; then
   export DEEPSEEK_API_KEY="$API_KEY"
 fi
 
 # Optional: persist /root (workspace) to S3 via Node SDK sync (sets EXIT trap;
-# do not exec before dsh).
+# do not exec before dsh). Boot-pulled files must win over nothing: this starts
+# the sync daemon and its boot pull, then the managed provider config is written
+# below so a stale bucket copy of settings.yaml cannot clobber env-driven models.
 # shellcheck source=/dev/null
 . /opt/dsh-web/sync-workspace.sh
+
+# Custom OpenAI-compatible provider (BASE_URL + MODEL), or clear managed block.
+# Runs after the S3 boot pull so the env-generated settings.yaml is never
+# overwritten by an older copy of the file stored in the bucket.
+/opt/dsh-web/sync-provider.sh
 
 # Seed a default workspace directory so the first-run directory picker in the
 # web UI has a ready option. Skipped when S3 is configured (the sync daemon

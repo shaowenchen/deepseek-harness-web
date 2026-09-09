@@ -80,6 +80,15 @@ function isExcluded(key) {
   return exclude.has(top);
 }
 
+// Files the entrypoint regenerates on every boot (from env). The bucket may
+// hold a stale copy from an earlier run, so pulling it on boot would clobber
+// env-driven config — e.g. a changed MODEL list. Downloads skip them entirely;
+// uploads still happen, so the fresh local copy converges the bucket.
+function isEntrypointManaged(key) {
+  const rel = keyToLocal(key);
+  return rel === '.dsh/settings.yaml' || rel === '.dsh/cordis.patch.yml';
+}
+
 async function listRemote() {
   const keys = new Map(); // key -> {size, etag}
   let token;
@@ -173,6 +182,7 @@ async function syncOnce() {
 
   // Download: remote object missing locally (and we're not just boot-pulling everything).
   for (const [key, r] of remote) {
+    if (isEntrypointManaged(key)) continue;
     const l = local.get(key);
     if (!l) {
       try {
@@ -201,10 +211,15 @@ async function syncOnce() {
 }
 
 async function main() {
-  // Boot: pull remote down first (source of truth).
+  // Boot: pull remote down first (source of truth) — except entrypoint-managed
+  // files, whose env-driven local copy must win over a stale bucket object.
   const remote = await listRemote();
   let pulled = 0;
   for (const [key] of remote) {
+    if (isEntrypointManaged(key)) {
+      dbg(`boot skip ${s3Url(key)} (entrypoint-managed)`);
+      continue;
+    }
     try {
       await pull(key);
       pulled++;
