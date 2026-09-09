@@ -1,7 +1,7 @@
 FROM node:24-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git \
+    && apt-get install -y --no-install-recommends ca-certificates curl git python3 \
     && rm -rf /var/lib/apt/lists/* \
     && npm install --global pnpm@10 --omit=dev \
     && npm cache clean --force
@@ -22,7 +22,7 @@ RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
     && npm cache clean --force
 
 COPY dsh/cordis.patch.yml /opt/dsh-web/cordis.patch.yml
-COPY scripts/entrypoint.sh /opt/dsh-web/entrypoint.sh
+COPY scripts/entrypoint.sh scripts/sync-auth-token.py /opt/dsh-web/
 RUN chmod +x /opt/dsh-web/entrypoint.sh \
     && cp /opt/dsh-web/cordis.patch.yml /dsh/cordis.patch.yml \
     && cp /opt/dsh-web/cordis.patch.yml /opt/dsh-web/home-seed/cordis.patch.yml \
