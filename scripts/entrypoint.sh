@@ -12,6 +12,14 @@ if [ -f "$DSH_HOME/.env" ]; then
   [ -s "$DSH_HOME/.env" ] || rm -f "$DSH_HOME/.env"
 fi
 
+# Custom OpenAI-compatible provider (BASE_URL + MODEL), or clear managed block.
+/opt/dsh-web/sync-provider.sh
+
+# Official DeepSeek route: only when not using a custom BASE_URL.
+if [ -z "${BASE_URL:-}" ] && [ -n "${API_KEY:-}" ] && [ -z "${DEEPSEEK_API_KEY:-}" ]; then
+  export DEEPSEEK_API_KEY="$API_KEY"
+fi
+
 # Preserve Docker CMD args (e.g. --port 3080).
 n=$#
 i=1

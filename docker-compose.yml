@@ -7,7 +7,12 @@ services:
     ports:
       - "${PORT:-3080}:3080"
     environment:
-      DEEPSEEK_API_KEY: ${API_KEY:?set API_KEY in .env}
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      # Official DeepSeek path (used when BASE_URL is empty).
+      DEEPSEEK_API_KEY: ${API_KEY}
+      # Custom OpenAI-compatible gateway (optional).
+      BASE_URL: ${BASE_URL:-}
+      MODEL: ${MODEL:-}
       TRUSTED_HOST: ${TRUSTED_HOST:-}
       DSH_TELEMETRY_DISABLED: "1"
     volumes:

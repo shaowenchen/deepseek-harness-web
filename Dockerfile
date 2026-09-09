@@ -16,8 +16,8 @@ RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
     && npm cache clean --force
 
 COPY dsh/cordis.patch.yml /opt/dsh-web/cordis.patch.yml
-COPY scripts/entrypoint.sh /opt/dsh-web/entrypoint.sh
-RUN chmod +x /opt/dsh-web/entrypoint.sh \
+COPY scripts/entrypoint.sh scripts/sync-provider.sh /opt/dsh-web/
+RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh \
     && mkdir -p /dsh /workspace \
     && cp /opt/dsh-web/cordis.patch.yml /dsh/cordis.patch.yml
 
