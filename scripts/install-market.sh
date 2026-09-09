@@ -6,6 +6,7 @@
 # Env: MARKET_PACKAGES (comma-separated, default dshmarket,dsh-file-explorer);
 #      INSTALL_MARKET (set to 0 to disable).
 set -eu
+set -o pipefail 2>/dev/null || true
 
 [ "${INSTALL_MARKET:-1}" = "0" ] && { echo "install-market: disabled"; return 0 2>/dev/null || exit 0; }
 
@@ -27,6 +28,8 @@ for pkg in $pkgs; do
     continue
   fi
   echo "install-market: installing $pkg into web profile"
-  dsh plugin --profile web add "$pkg" 2>&1 | sed 's/^/install-market: /'
+  if ! dsh plugin --profile web add "$pkg" 2>&1 | sed 's/^/install-market: /'; then
+    echo "install-market: FAILED to install $pkg" >&2
+  fi
 done
 IFS=$OLDIFS

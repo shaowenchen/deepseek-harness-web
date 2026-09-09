@@ -26,11 +26,13 @@ const secretKey = (process.env.S3_SECRET_KEY || '').trim();
 const debounceMs = 500;
 const isDebug = (process.env.LOG_LEVEL || '').toLowerCase() === 'debug';
 
-// Per-file sync logging: always shown so you can see exactly which file synced
-// and where to/from (absolute local path <-> full s3:// key). LOG_LEVEL=debug
-// adds nothing extra today but is kept as the knob for future verbosity.
+// info level (default): lifecycle + per-pass sync counts only.
 function log(...args) {
   console.log('s3-sync:', ...args);
+}
+// debug level: per-file sync details (which file, which direction).
+function dbg(...args) {
+  if (isDebug) console.log('s3-sync: [debug]', ...args);
 }
 
 if (!bucket || !endpoint || !accessKey || !secretKey) {
@@ -154,7 +156,7 @@ async function syncOnce() {
       try {
         await push(key, join(workspace, ...keyToLocal(key).split('/')));
         up++;
-        log(`upload ${localAbsPath(key)} -> ${s3Url(key)}`);
+        dbg(`upload ${localAbsPath(key)} -> ${s3Url(key)}`);
       } catch (e) {
         console.error(`s3-sync: push ${key} failed: ${e.message}`);
       }
@@ -168,7 +170,7 @@ async function syncOnce() {
       try {
         await pull(key, r);
         down++;
-        log(`download ${s3Url(key)} -> ${localAbsPath(key)}`);
+        dbg(`download ${s3Url(key)} -> ${localAbsPath(key)}`);
       } catch (e) {
         console.error(`s3-sync: pull ${key} failed: ${e.message}`);
       }
@@ -181,7 +183,7 @@ async function syncOnce() {
       try {
         await removeRemote(key);
         del++;
-        log(`delete ${s3Url(key)} (local ${localAbsPath(key)} removed)`);
+        dbg(`delete ${s3Url(key)} (local ${localAbsPath(key)} removed)`);
       }
       catch (e) { console.error(`s3-sync: delete ${key} failed: ${e.message}`); }
     }
@@ -198,7 +200,7 @@ async function main() {
     try {
       await pull(key);
       pulled++;
-      log(`boot download ${s3Url(key)} -> ${localAbsPath(key)}`);
+      dbg(`boot download ${s3Url(key)} -> ${localAbsPath(key)}`);
     }
     catch (e) { console.error(`s3-sync: boot pull ${key} failed: ${e.message}`); }
   }
@@ -214,7 +216,7 @@ async function main() {
     running = true;
     try {
       const { up, down, del } = await syncOnce();
-      if (up || down || del) console.log(`s3-sync: sync up=${up} down=${down} del=${del}`);
+      if (up || down || del) log(`sync up=${up} down=${down} del=${del}`);
     } catch (e) {
       console.error(`s3-sync: sync failed: ${e.message}`);
     } finally {
