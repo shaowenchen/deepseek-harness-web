@@ -1,8 +1,8 @@
 #!/bin/sh
 # Persist $DSH_WORKSPACE to S3 (or S3-compatible) storage.
 # Strategy: try a real s3fs mount first (fast, live filesystem). If FUSE is not
-# available (Railway, macOS Docker Desktop, etc.), fall back to rclone sync
-# (boot pull + interval push/pull), which needs no /dev/fuse.
+# available (Railway, macOS Docker Desktop, etc.), fall back to a Node sync daemon
+# using @aws-sdk/client-s3 (boot pull + interval push/pull), which needs no /dev/fuse.
 # Required: S3_BUCKET, S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY
 # Optional: S3_PATH, S3_PATH_STYLE (default 1), S3_REGION, SYNC_INTERVAL (default 30)
 set -eu
@@ -80,61 +80,27 @@ unmount_workspace() {
 }
 
 # ---------------------------------------------------------------------------
-# Mode 2: rclone sync (no FUSE needed). Boot pull + interval push/pull loop.
+# Mode 2: Node SDK sync daemon (no FUSE needed). Boot pull + interval push/pull.
+# Uses @aws-sdk/client-s3 with the same client params that are verified to work
+# against KS3 (storage-console's createS3Client), which rclone's generic driver
+# fails to connect to.
 # ---------------------------------------------------------------------------
-start_rclone_sync() {
-  command -v rclone >/dev/null 2>&1 || { echo "workspace: rclone not installed, giving up on S3 persistence" >&2; return 1; }
-
-  mkdir -p "$workspace" /run/rclone
-  conf_file=/run/rclone/rclone.conf
-  umask 077
-
-  {
-    printf '[dsh-s3]\n'
-    printf 'type = s3\n'
-    printf 'provider = Other\n'
-    printf 'endpoint = %s\n' "$S3_ENDPOINT"
-    printf 'access_key_id = %s\n' "$S3_ACCESS_KEY"
-    printf 'secret_access_key = %s\n' "$S3_SECRET_KEY"
-    if [ -n "${S3_REGION:-}" ]; then
-      printf 'region = %s\n' "$S3_REGION"
-    fi
-    case "$path_style" in
-      1|true|TRUE|yes|YES|on|ON) printf 'force_path_style = true\n' ;;
-    esac
-  } > "$conf_file"
-  chmod 600 "$conf_file"
-
-  remote="dsh-s3:${S3_BUCKET}"
-  if [ -n "$prefix" ]; then
-    remote="${remote}/${prefix}"
+start_node_sync() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "workspace: node not installed, giving up on S3 persistence" >&2
+    return 1
   fi
 
-  interval="${SYNC_INTERVAL:-30}"
+  echo "workspace: starting s3-sync daemon (AWS SDK)"
+  node /opt/dsh-web/s3-sync.mjs &
+  SYNC_PID=$!
 
-  echo "workspace: rclone initial pull ${remote} -> ${workspace}"
-  rclone copy "$remote" "$workspace" --config "$conf_file"
-
-  (
-    while :; do
-      sleep "$interval"
-      echo "workspace: rclone sync ${workspace} <-> ${remote}"
-      rclone sync "$workspace" "$remote" --config "$conf_file" \
-        || echo "workspace: rclone push failed" >&2
-      rclone copy "$remote" "$workspace" --config "$conf_file" \
-        || echo "workspace: rclone pull failed" >&2
-    done
-  ) &
-  LOOP_PID=$!
-
-  final_sync() {
-    kill "$LOOP_PID" 2>/dev/null || true
-    wait "$LOOP_PID" 2>/dev/null || true
-    echo "workspace: rclone final sync ${workspace} -> ${remote}"
-    rclone sync "$workspace" "$remote" --config "$conf_file" || true
-    rm -f "$conf_file"
+  stop_sync() {
+    # Graceful stop: SIGTERM makes the daemon do a final upload pass.
+    kill -TERM "$SYNC_PID" 2>/dev/null || true
+    wait "$SYNC_PID" 2>/dev/null || true
   }
-  trap final_sync EXIT INT TERM
+  trap stop_sync EXIT INT TERM
 }
 
 # ---------------------------------------------------------------------------
@@ -144,5 +110,5 @@ start_rclone_sync() {
 if try_s3fs; then
   trap unmount_workspace EXIT INT TERM
 else
-  start_rclone_sync
+  start_node_sync
 fi

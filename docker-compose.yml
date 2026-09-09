@@ -15,7 +15,7 @@ services:
       MODEL: ${MODEL:-}
       TRUSTED_HOST: ${TRUSTED_HOST:-}
       # Optional S3 / S3-compatible workspace: s3fs mount when FUSE is available,
-      # else rclone sync (no FUSE needed; works on Railway too).
+      # else Node SDK sync (@aws-sdk/client-s3, no FUSE needed; works on Railway).
       S3_BUCKET: ${S3_BUCKET:-}
       S3_PATH: ${S3_PATH:-}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
@@ -30,7 +30,7 @@ services:
       # Local fallback workspace; used by sync mode (or s3fs covers it when mounted).
       - ./workspace:/workspace
     # FUSE privileges for s3fs mount mode (ignored on platforms without /dev/fuse,
-    # where the script automatically falls back to rclone sync).
+    # where the script automatically falls back to Node SDK sync).
     devices:
       - /dev/fuse:/dev/fuse
     cap_add:

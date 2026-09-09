@@ -46,15 +46,11 @@ RUN apt-get update \
     && node -v && npm -v \
     && rm -rf /var/lib/apt/lists/*
 
-# rclone for optional S3 workspace sync (no FUSE needed; runs on Railway etc).
-RUN ARCH="$(dpkg --print-architecture)" \
-    && curl -fsSL "https://downloads.rclone.org/rclone-current-linux-${ARCH}.zip" \
-         -o /tmp/rclone.zip \
-    && unzip /tmp/rclone.zip -d /tmp/rclone \
-    && cp "/tmp/rclone/$(ls /tmp/rclone | grep '^rclone-')/rclone" /usr/local/bin/rclone \
-    && chmod +x /usr/local/bin/rclone \
-    && rclone version \
-    && rm -rf /tmp/rclone /tmp/rclone.zip
+# AWS SDK for the Node S3 sync daemon (s3-sync.mjs). KS3 works with these
+# @aws-sdk/client-s3 client params; rclone's generic S3 driver does not.
+RUN mkdir -p /opt/dsh-web \
+    && npm install --prefix /opt/dsh-web @aws-sdk/client-s3@3 --omit=dev \
+    && rm -rf /opt/dsh-web/node_modules/.cache
 
 WORKDIR /workspace
 
@@ -63,7 +59,7 @@ RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
     && npm cache clean --force
 
 COPY dsh/cordis.patch.yml /opt/dsh-web/cordis.patch.yml
-COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/sync-workspace.sh /opt/dsh-web/
+COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/sync-workspace.sh scripts/s3-sync.mjs /opt/dsh-web/
 RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh /opt/dsh-web/sync-workspace.sh \
     && mkdir -p /dsh /workspace \
     && cp /opt/dsh-web/cordis.patch.yml /dsh/cordis.patch.yml
