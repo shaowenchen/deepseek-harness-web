@@ -23,6 +23,8 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-}
       S3_PATH_STYLE: ${S3_PATH_STYLE:-0}
       S3_REGION: ${S3_REGION:-}
+      WORKSPACE_DIR: ${WORKSPACE_DIR:-default}
+      LOG_LEVEL: ${LOG_LEVEL:-}
       DSH_TELEMETRY_DISABLED: "1"
     volumes:
       - ./data:/dsh
