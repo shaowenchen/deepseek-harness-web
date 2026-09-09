@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-09-09
+goal: Let MODEL accept a comma-separated list of model ids, all written into the
+  custom provider's models list, with the first model set as the default

@@ -1,6 +1,7 @@
 #!/bin/sh
 # Merge a managed custom OpenAI-compatible provider into $DSH_HOME/settings.yaml.
-# Env: BASE_URL, MODEL (required when BASE_URL is set), API_KEY (referenced as apiKeyEnv).
+# Env: BASE_URL, MODEL (required when BASE_URL is set; comma-separated list),
+# API_KEY (referenced as apiKeyEnv). The first model id becomes the default.
 set -eu
 
 settings="${DSH_HOME:?DSH_HOME required}/settings.yaml"
@@ -43,7 +44,31 @@ mkdir -p "$DSH_HOME"
 strip_managed
 
 base_q=$(yaml_quote "$BASE_URL")
-model_q=$(yaml_quote "$MODEL")
+
+# Split MODEL on commas via IFS word-splitting (sh-portable), trimming each id
+# and dropping empty segments; the first non-empty id becomes the default.
+models_block=
+first_model=
+old_ifs=$IFS
+set -f
+IFS=','
+for id in $MODEL; do
+  id=$(printf '%s' "$id" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  [ -n "$id" ] || continue
+  if [ -z "$first_model" ]; then
+    first_model=$id
+  fi
+  models_block="${models_block}
+        - id: $(yaml_quote "$id")"
+done
+set +f
+IFS=$old_ifs
+
+if [ -z "$first_model" ]; then
+  echo "sync-provider: MODEL contains no model ids" >&2
+  exit 1
+fi
+default_q=$(yaml_quote "$first_model")
 
 {
   if [ -f "$settings" ]; then
@@ -59,11 +84,10 @@ llm-pi-ai:
       apiKeyEnv: API_KEY
       api: openai-completions
       baseURL: $base_q
-      models:
-        - id: $model_q
+      models:$models_block
 agent-default-model:
   provider: custom
-  model: $model_q
+  model: $default_q
 $end
 EOF
 } > "$settings.tmp"
