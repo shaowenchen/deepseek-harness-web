@@ -2,9 +2,8 @@
 #
 # Usage:
 #   1. Replace chat.example.com with your domain.
-#   2. Set TRUSTED_HOST=chat.example.com in .env
-#   3. Put TLS certs on the host and adjust ssl_certificate paths.
-#   4. Point upstream to the compose service (host port 3080 by default).
+#   2. Put TLS certs on the host and adjust ssl_certificate paths.
+#   3. Point upstream to the compose service (host port 3080 by default).
 
 upstream dsh_web {
     server 127.0.0.1:3080;

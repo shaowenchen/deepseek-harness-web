@@ -19,7 +19,6 @@ open http://localhost:3080
 | `API_KEY` | ✅ | — | 模型 API Key |
 | `PORT` | | `3080` | 宿主机端口 |
 | `BASE_URL` | | 官方默认 | 可选 API 端点（兼容网关） |
-| `TRUSTED_HOST` | | 空 | 反代域名，如 `chat.example.com` |
 
 ## 项目结构
 
@@ -41,7 +40,7 @@ open http://localhost:3080
 
 ## 反向代理（可选）
 
-`.env` 设 `TRUSTED_HOST=chat.example.com`，示例见 [`deploy/nginx.conf.example`](deploy/nginx.conf.example)。必须保留 `Host` 与 WebSocket 升级。
+示例见 [`deploy/nginx.conf.example`](deploy/nginx.conf.example)。必须保留 `Host` 与 WebSocket 升级。
 
 ## 高级用法
 

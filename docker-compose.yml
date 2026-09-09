@@ -13,7 +13,6 @@ services:
     environment:
       DEEPSEEK_API_KEY: ${API_KEY:?set API_KEY in .env}
       BASE_URL: ${BASE_URL:-}
-      DSH_TRUSTED_HOST: ${TRUSTED_HOST:-}
       DSH_TELEMETRY_DISABLED: "1"
     volumes:
       - dsh-data:/dsh
