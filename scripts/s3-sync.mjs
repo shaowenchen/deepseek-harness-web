@@ -25,9 +25,11 @@ const secretKey = (process.env.S3_SECRET_KEY || '').trim();
 const debounceMs = 500;
 const isDebug = (process.env.LOG_LEVEL || '').toLowerCase() === 'debug';
 
-// Debug-only logging: per-file sync details (which file, which direction).
-function dbg(...args) {
-  if (isDebug) console.log('s3-sync: [debug]', ...args);
+// Per-file sync logging: always shown so you can see exactly which file synced
+// and where to/from (absolute local path <-> full s3:// key). LOG_LEVEL=debug
+// adds nothing extra today but is kept as the knob for future verbosity.
+function log(...args) {
+  console.log('s3-sync:', ...args);
 }
 
 if (!bucket || !endpoint || !accessKey || !secretKey) {
@@ -56,6 +58,10 @@ const client = new S3Client({
 const localToKey = (relPath) => [prefix, relPath].filter(Boolean).join('/');
 // local relative path for a remote key under prefix.
 const keyToLocal = (key) => (prefix && key.startsWith(prefix + '/') ? key.slice(prefix.length + 1) : key);
+// Helper: local absolute path for a remote key.
+const localAbsPath = (key) => join(workspace, ...keyToLocal(key).split('/'));
+// Helper: full s3 URL for a key.
+const s3Url = (key) => `s3://${bucket}/${key}`;
 
 async function listRemote() {
   const keys = new Map(); // key -> {size, etag}
@@ -130,7 +136,7 @@ async function syncOnce() {
       try {
         await push(key, join(workspace, ...keyToLocal(key).split('/')));
         up++;
-        dbg(`upload ${key} (${keyToLocal(key)}) -> s3://${bucket}/${key}`);
+        log(`upload ${localAbsPath(key)} -> ${s3Url(key)}`);
       } catch (e) {
         console.error(`s3-sync: push ${key} failed: ${e.message}`);
       }
@@ -144,7 +150,7 @@ async function syncOnce() {
       try {
         await pull(key, r);
         down++;
-        dbg(`download s3://${bucket}/${key} -> ${join(workspace, ...keyToLocal(key).split('/'))}`);
+        log(`download ${s3Url(key)} -> ${localAbsPath(key)}`);
       } catch (e) {
         console.error(`s3-sync: pull ${key} failed: ${e.message}`);
       }
@@ -157,7 +163,7 @@ async function syncOnce() {
       try {
         await removeRemote(key);
         del++;
-        dbg(`delete s3://${bucket}/${key} (local removed ${keyToLocal(key)})`);
+        log(`delete ${s3Url(key)} (local ${localAbsPath(key)} removed)`);
       }
       catch (e) { console.error(`s3-sync: delete ${key} failed: ${e.message}`); }
     }
@@ -168,18 +174,17 @@ async function syncOnce() {
 
 async function main() {
   // Boot: pull remote down first (source of truth).
-  console.log(`s3-sync: boot pull ${bucket}/${prefix} -> ${workspace}`);
   const remote = await listRemote();
   let pulled = 0;
   for (const [key] of remote) {
     try {
       await pull(key);
       pulled++;
-      dbg(`boot download s3://${bucket}/${key} -> ${join(workspace, ...keyToLocal(key).split('/'))}`);
+      log(`boot download ${s3Url(key)} -> ${localAbsPath(key)}`);
     }
     catch (e) { console.error(`s3-sync: boot pull ${key} failed: ${e.message}`); }
   }
-  console.log(`s3-sync: boot pull complete (${pulled} objects)`);
+  log(`boot pull complete (${pulled} objects) -> ${workspace}`);
 
   // Watch workspace; debounce bursts of events, then run one sync pass.
   let dirty = false;

@@ -35,7 +35,7 @@ https://chat.example.com:8443/?token=日志里的token
 | `S3_PATH_STYLE` | 否 | `0` | `1` 启用 path-style（MinIO / 自建）；`0` 虚拟主机风格（AWS / 金山云 KS3 等官方域名） |
 | `S3_REGION` | 否 | 空 | 可选 region，如 `cn-beijing` |
 | `WORKSPACE_DIR` | 否 | `default` | 首次启动时在 `/workspace` 下预建的默认工作区目录名（未配 S3 时生效），让 web UI 的目录选择器有默认项 |
-| `LOG_LEVEL` | 否 | 空 | `debug` 时打印每次同步的具体文件与流向（`upload ... -> s3://...`） |
+| `LOG_LEVEL` | 否 | 空 | 预留；同步文件日志默认打印（本地绝对路径 ↔ `s3://`），设为 `debug` 供将来扩展更细输出 |
 
 不设 `BASE_URL` 时走官方 DeepSeek（`API_KEY` → `DEEPSEEK_API_KEY`）。  
 设了 `BASE_URL` + `MODEL` 时写入 `data/settings.yaml` 的 `llm-pi-ai` 自定义路由，并设为默认模型。
