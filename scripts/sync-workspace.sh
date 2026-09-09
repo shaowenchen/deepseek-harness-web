@@ -1,6 +1,6 @@
 #!/bin/sh
-# Persist $DSH_WORKSPACE (default /root, the root user's HOME and dsh's working
-# area) to S3 with the Node sync daemon.
+# Persist /root (the root user's HOME and dsh's working area) to S3 with the
+# Node sync daemon.
 # Uses @aws-sdk/client-s3 with the same client params that storage-console uses
 # against KS3 (virtual-host style, requestChecksumCalculation WHEN_REQUIRED),
 # which is verified to work where rclone's generic S3 driver fails.
@@ -9,7 +9,7 @@
 # Optional: S3_PATH, S3_REGION
 set -eu
 
-workspace="${DSH_WORKSPACE:-/root}"
+workspace=/root
 
 if [ -z "${S3_BUCKET:-}" ]; then
   return 0 2>/dev/null || exit 0

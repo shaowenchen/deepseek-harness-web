@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-mkdir -p "$DSH_HOME" "$DSH_WORKSPACE"
+mkdir -p "$DSH_HOME" /root
 cp /opt/dsh-web/cordis.patch.yml "$DSH_HOME/cordis.patch.yml"
 
 # Drop leftover auth-gate from older images if present.
@@ -32,7 +32,7 @@ if [ -z "${S3_BUCKET:-}" ]; then
   default_ws="${WORKSPACE_DIR:-default}"
   case "$default_ws" in
     /?*) ws_path="$default_ws" ;;
-    *)   ws_path="${DSH_WORKSPACE:-/root}/$default_ws" ;;
+    *)   ws_path="/root/$default_ws" ;;
   esac
   mkdir -p "$ws_path"
 fi

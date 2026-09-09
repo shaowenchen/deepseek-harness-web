@@ -3,7 +3,6 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
     DSH_HOME=/dsh \
-    DSH_WORKSPACE=/root \
     DSH_TELEMETRY_DISABLED=1
 
 # General-purpose base tools + Node 24 (official tarball).
