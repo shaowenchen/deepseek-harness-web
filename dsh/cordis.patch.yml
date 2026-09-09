@@ -5,8 +5,3 @@
     compression: gzip
     compressionLevel: 1
     compressionThresholdBytes: 1024
-# dsh-market is a bundle (auto-loads via dsh.profile.bundles, do NOT insert here).
-# dsh-file-explorer is not a bundle and needs an explicit insert to load.
-- insert:
-    - id: file-explorer
-      name: 'dsh-file-explorer'

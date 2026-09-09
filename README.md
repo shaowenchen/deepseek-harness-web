@@ -32,8 +32,6 @@ docker compose logs -f dsh-web
 | `TRUSTED_HOST` | 域名时 | 空 | 信任的 Host，可带端口 |
 | `WORKSPACE_DIR` | 否 | `default` | 首次启动在 `/root` 预建的默认工作区目录 |
 | `LOG_LEVEL` | 否 | 空 | `debug` 时打印更细的同步日志 |
-| `INSTALL_MARKET` | 否 | `1` | `0` 关闭插件自动安装 |
-| `MARKET_PACKAGES` | 否 | `dshmarket,dsh-file-explorer` | 自动安装的插件包列表（逗号分隔） |
 
 ### 模型路由
 
