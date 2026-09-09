@@ -1,7 +1,4 @@
-# docker compose up -d   -> starts dsh web on http://localhost:3080
-#
-# Deploy-style configuration: environment variables drive the model settings,
-# a named volume persists session data, and the port is published.
+# docker compose up -d   -> http://localhost:3080
 
 services:
   dsh-web:
@@ -11,50 +8,22 @@ services:
     image: deepseek-harness-web:local
     container_name: dsh-web
     restart: unless-stopped
-
-    # Expose the web UI on all host interfaces.
     ports:
-      - "${DSH_WEB_PORT:-3080}:3080"
-
-    # Model & runtime configuration — all driven by environment variables.
-    # Copy `.env.example` to `.env` and fill in the real values.
+      - "${PORT:-3080}:3080"
     environment:
-      # ── model (DeepSeek official API) ──────────────────────────────────────
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?set DEEPSEEK_API_KEY in .env}
-      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      # Optional secret file mount (see README); ignored when DEEPSEEK_API_KEY is set.
-      DEEPSEEK_API_KEY_FILE: ${DEEPSEEK_API_KEY_FILE:-}
-      DSH_LLM_REASONING_EFFORT: ${DSH_LLM_REASONING_EFFORT:-high}
-      DSH_LLM_MAX_TOKENS: ${DSH_LLM_MAX_TOKENS:-256000}
-
-      # ── agent / permission mode ────────────────────────────────────────────
-      # read-only | workspace-write | danger-full-access
-      DSH_PERMISSION_MODE: ${DSH_PERMISSION_MODE:-workspace-write}
-
-      # ── web surface ────────────────────────────────────────────────────────
-      # Comma-separated host[:port] values for reverse-proxy deployments.
-      DSH_TRUSTED_HOST: ${DSH_TRUSTED_HOST:-}
-      DSH_TRUSTED_HOSTS: ${DSH_TRUSTED_HOSTS:-}
-
-      # ── telemetry ──────────────────────────────────────────────────────────
+      DEEPSEEK_API_KEY: ${API_KEY:?set API_KEY in .env}
+      BASE_URL: ${BASE_URL:-}
+      DSH_TRUSTED_HOST: ${TRUSTED_HOST:-}
       DSH_TELEMETRY_DISABLED: "1"
-
-    # Persist all dsh user data (sessions, settings, credentials, storages).
     volumes:
       - dsh-data:/dsh
-      # Optionally mount a host workspace directory the agent can read/write:
       # - ./workspace:/workspace
-
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3080/"]
       interval: 30s
       timeout: 5s
       start_period: 60s
       retries: 3
-
-    # Optional: expose only on the loopback for local-only access
-    # ports:
-    #   - "127.0.0.1:${DSH_WEB_PORT:-3080}:3080"
 
 volumes:
   dsh-data:

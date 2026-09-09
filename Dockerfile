@@ -41,8 +41,7 @@ RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
 # See ./dsh/cordis.patch.yml.
 COPY dsh/cordis.patch.yml /dsh/cordis.patch.yml
 
-# Entrypoint helpers: env -> CLI flags / settings.yaml sync.
-COPY scripts/entrypoint.sh scripts/sync-llm-settings.py /opt/dsh-web/
+COPY scripts/entrypoint.sh /opt/dsh-web/entrypoint.sh
 RUN chmod +x /opt/dsh-web/entrypoint.sh
 
 # Run as the non-root node user; ensure writable runtime dirs.
