@@ -15,33 +15,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve image name
-        id: image
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-        run: |
-          user=$(printf '%s' "${DOCKERHUB_USERNAME:-$GITHUB_REPOSITORY_OWNER}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-          if [ -z "$user" ]; then
-            echo "DOCKERHUB_USERNAME is empty" >&2
-            exit 1
-          fi
-          echo "user=$user" >> "$GITHUB_OUTPUT"
-          echo "name=${user}/deepseek-harness-web" >> "$GITHUB_OUTPUT"
-
       - uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-          username: ${{ steps.image.outputs.user }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.image.outputs.name }}
+          images: shaowenchen/deepseek-harness-web
           tags: |
             type=ref,event=branch
             type=ref,event=pr
