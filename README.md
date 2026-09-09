@@ -58,4 +58,8 @@ volumes:
 make up / make logs / make down / make clean
 ```
 
-镜像由 CI 推送到 `ghcr.io/shaowenchen/deepseek-harness-web`（`latest` / `master` / `sha-*`）。
+镜像由 CI 推送到 Docker Hub：`<user>/deepseek-harness-web`（`latest` / `master` / `sha-*`）。
+
+仓库 Secrets 需配置：
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`（Access Token，不要用登录密码）
