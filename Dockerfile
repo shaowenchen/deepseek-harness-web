@@ -1,13 +1,44 @@
-FROM node:24-slim
+FROM ubuntu:24.04
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV NODE_ENV=production \
+ENV DEBIAN_FRONTEND=noninteractive \
+    NODE_ENV=production \
     DSH_HOME=/dsh \
     DSH_WORKSPACE=/workspace \
     DSH_TELEMETRY_DISABLED=1
+
+# General-purpose base tools + Node 24 (official tarball).
+ARG NODE_VERSION=24.11.1
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+      bash \
+      ca-certificates \
+      curl \
+      dnsutils \
+      git \
+      gzip \
+      iproute2 \
+      iputils-ping \
+      jq \
+      less \
+      netcat-openbsd \
+      openssh-client \
+      procps \
+      python3 \
+      tar \
+      unzip \
+      vim-tiny \
+      wget \
+      xz-utils \
+    && ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+         amd64) NODE_ARCH=x64 ;; \
+         arm64) NODE_ARCH=arm64 ;; \
+         *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
+         | tar -xJ -C /usr/local --strip-components=1 \
+    && node -v && npm -v \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 
