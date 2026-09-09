@@ -2,7 +2,7 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
-    DSH_HOME=/dsh \
+    DSH_HOME=/root/.dsh \
     DSH_TELEMETRY_DISABLED=1
 
 # General-purpose base tools + Node 24 (official tarball).
@@ -59,8 +59,8 @@ RUN npm install --global pnpm@9 \
 COPY dsh/cordis.patch.yml /opt/dsh-web/cordis.patch.yml
 COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/sync-workspace.sh scripts/s3-sync.mjs scripts/install-market.sh /opt/dsh-web/
 RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh /opt/dsh-web/sync-workspace.sh /opt/dsh-web/install-market.sh \
-    && mkdir -p /dsh /root \
-    && cp /opt/dsh-web/cordis.patch.yml /dsh/cordis.patch.yml
+    && mkdir -p /root/.dsh /root \
+    && cp /opt/dsh-web/cordis.patch.yml /root/.dsh/cordis.patch.yml
 
 EXPOSE 3080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

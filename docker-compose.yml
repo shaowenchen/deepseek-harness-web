@@ -30,6 +30,5 @@ services:
       MARKET_PACKAGE: ${MARKET_PACKAGE:-dshmarket}
       DSH_TELEMETRY_DISABLED: "1"
     volumes:
-      - ./data:/dsh
-      # Workspace = container HOME (/root); synced to S3 when S3_BUCKET is set.
+      # Workspace + dsh config (.dsh) live under /root, all persisted via ./home.
       - ./home:/root

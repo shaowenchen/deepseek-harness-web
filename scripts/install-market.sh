@@ -2,7 +2,7 @@
 # Install the dshmarket plugin bundle into the web profile (idempotent).
 # Runs `dsh plugin --profile web add <pkg>` only when the package is not yet a
 # profile dependency, so restarts don't re-run pnpm. The profile lives under
-# the $DSH_HOME volume, so this persists across restarts once installed.
+# $DSH_HOME (/root/.dsh), persisted via the ./home mount.
 # Env: MARKET_PACKAGE (default dshmarket); INSTALL_MARKET (set to 0 to disable).
 set -eu
 

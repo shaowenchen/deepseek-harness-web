@@ -7,7 +7,7 @@ DeepSeek Harness 的 Web UI 容器化部署（支持 Railway）。
 ```bash
 cp .env.example .env
 # 编辑 .env，填入 API_KEY
-mkdir -p data home
+mkdir -p home
 docker compose up -d --build
 docker compose logs -f dsh-web
 ```
@@ -38,7 +38,7 @@ docker compose logs -f dsh-web
 ### 模型路由
 
 - 不设 `BASE_URL` → 走官方 DeepSeek（`API_KEY` 即 DeepSeek Key）
-- 设 `BASE_URL` + `MODEL` → 写入 `data/settings.yaml` 的自定义路由并设为默认模型
+- 设 `BASE_URL` + `MODEL` → 写入 `/root/.dsh/settings.yaml` 的自定义路由并设为默认模型
 
 ### S3 数据持久化（可选）
 
@@ -60,7 +60,6 @@ docker compose logs -f dsh-web
 
 | 宿主机 | 容器 | 用途 |
 |---|---|---|
-| `./data` | `/dsh` | 配置与状态 |
-| `./home` | `/root`（root 用户 HOME） | 工作区 = 家目录（dsh 实际读写目录；配了 S3 时同步到桶） |
+| `./home` | `/root`（root 用户 HOME） | 工作区 + dsh 配置（`/root/.dsh`），一份挂载全持久化；配了 S3 时同步到桶 |
 
 镜像：`shaowenchen/deepseek-harness-web:latest`
