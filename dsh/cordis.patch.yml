@@ -1,26 +1,3 @@
-# Deployment patch layer for the dsh `web` profile.
-#
-# Why this exists
-# ---------------
-# The shipped web profile deliberately binds the loopback interface and the
-# CLI hard-rejects `--host 0.0.0.0` as a safety guard ("it would expose remote
-# code execution to the network"). A container deployment *must* bind all
-# interfaces so the published port is reachable from the host/LAN.
-#
-# The web-app bundle already leaves this seam open: its `webserver` row reads
-# `ctx.webStartup.host ?? '127.0.0.1'`. This file sits in the HOME-level patch
-# layer ($DSH_HOME/cordis.patch.yml), which the launcher composes AFTER the
-# bundle patches, so it wins. It restates every key the bundle's `webserver`
-# row owns (a patch replaces the whole row config).
-#
-# Trust model
-# -----------
-# Binding 0.0.0.0 advertises the LAN URL and lets browsers from the network
-# reach the UI. Every Host API method and WebSocket stream is still gated by a
-# per-process boot token exchanged for a signed cookie — this is remote-accessible
-# UI, NOT unauthenticated access. Put it behind a reverse proxy / auth if you
-# publish it beyond a trusted network.
-
 - id: webserver
   config:
     host: '0.0.0.0'

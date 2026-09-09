@@ -1,28 +1,16 @@
-# docker compose up -d   -> http://localhost:3080
-
 services:
   dsh-web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: deepseek-harness-web:local
+    image: shaowenchen/deepseek-harness-web:latest
+    build: .
     container_name: dsh-web
     restart: unless-stopped
     ports:
       - "${PORT:-3080}:3080"
     environment:
       DEEPSEEK_API_KEY: ${API_KEY:?set API_KEY in .env}
-      BASE_URL: ${BASE_URL:-}
       DSH_TELEMETRY_DISABLED: "1"
     volumes:
       - dsh-data:/dsh
-      # - ./workspace:/workspace
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3080/"]
-      interval: 30s
-      timeout: 5s
-      start_period: 60s
-      retries: 3
 
 volumes:
   dsh-data:
