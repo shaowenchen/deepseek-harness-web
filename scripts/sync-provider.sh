@@ -25,6 +25,29 @@ strip_managed() {
   [ -s "$settings" ] || rm -f "$settings"
 }
 
+# Remove hand-written top-level sections that dsh-web-managed owns, so the
+# managed block written below is the only declaration of those keys. A second
+# `llm-pi-ai` (e.g. one added through the web UI) would be a duplicate YAML
+# map key and dsh rejects the whole document.
+strip_keys() {
+  if [ ! -f "$settings" ]; then
+    return 0
+  fi
+  awk '
+    BEGIN { skip=0 }
+    {
+      if (skip) {
+        if ($0 ~ /^[[:space:]]/ || $0 ~ /^$/ || $0 ~ /^#/) { next }
+        skip=0
+      }
+      if ($0 == "llm-pi-ai:" || $0 == "agent-default-model:") { skip=1; next }
+      print
+    }
+  ' "$settings" > "$settings.tmp"
+  mv "$settings.tmp" "$settings"
+  [ -s "$settings" ] || rm -f "$settings"
+}
+
 if [ -z "${BASE_URL:-}" ]; then
   strip_managed
   exit 0
@@ -42,6 +65,7 @@ fi
 
 mkdir -p "$DSH_HOME"
 strip_managed
+strip_keys
 
 base_q=$(yaml_quote "$BASE_URL")
 
