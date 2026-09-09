@@ -60,6 +60,4 @@ make up / make logs / make down / make clean
 
 镜像由 CI 推送到 Docker Hub：`shaowenchen/deepseek-harness-web`（`latest` / `master` / `sha-*`）。
 
-仓库 Secrets 需配置：
-- `DOCKERHUB_USERNAME`（Docker Hub 用户名，不要填邮箱）
-- `DOCKERHUB_TOKEN`（Access Token）
+仓库 Secrets 需配置 `DOCKERHUB_TOKEN`（Access Token）。
