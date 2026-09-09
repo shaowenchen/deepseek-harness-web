@@ -51,6 +51,7 @@ docker compose logs -f dsh-web
 | `S3_SECRET_KEY` | 是* | 空 | Secret Key |
 | `S3_REGION` | 否 | 空 | 如 `cn-beijing` |
 | `S3_PATH_STYLE` | 否 | `0` | `0` 虚拟主机风格（AWS/金山云）；`1` path-style（MinIO/自建） |
+| `SYNC_EXCLUDE` | 否 | `.npm,.cache,.local,.config` | 同步时排除的 HOME 顶层目录（逗号分隔） |
 
 *设 `S3_BUCKET` 时必填。
 
