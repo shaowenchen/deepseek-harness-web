@@ -5,9 +5,3 @@
     compression: gzip
     compressionLevel: 1
     compressionThresholdBytes: 1024
-
-- id: dsh-auth-gate
-  config:
-    mode: token
-    cookieSecure: false
-    tokenRef: DSH_AUTH_TOKEN
