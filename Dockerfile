@@ -48,7 +48,7 @@ RUN mkdir -p /opt/dsh-web \
 
 WORKDIR /root
 
-ARG DSH_VERSION=0.1.5-alpha.2
+ARG DSH_VERSION=0.1.5-alpha.1
 RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
     && npm cache clean --force
 
