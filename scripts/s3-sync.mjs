@@ -25,6 +25,10 @@ const region = (process.env.S3_REGION || '').trim() || 'us-east-1';
 const accessKey = (process.env.S3_ACCESS_KEY || '').trim();
 const secretKey = (process.env.S3_SECRET_KEY || '').trim();
 const debounceMs = 500;
+// How many objects to download in parallel during the boot pull. Serial pulls
+// of thousands of objects stall on per-object network RTT; a bounded pool keeps
+// throughput high without tripping S3 rate limits.
+const BOOT_PULL_CONCURRENCY = 16;
 const isDebug = (process.env.LOG_LEVEL || '').toLowerCase() === 'debug';
 
 // info level (default): lifecycle + per-pass sync counts only.
@@ -88,6 +92,32 @@ function isEntrypointManaged(key) {
   return rel === '.dsh/settings.yaml' || rel === '.dsh/cordis.patch.yml';
 }
 
+// Local coordination sentinel written by the daemon after boot pull + purge;
+// never synced to the bucket (see sync-workspace.sh, which polls it). Folded
+// into shouldIgnore below.
+const READY_FILE = '.dsh-sync-ready';
+
+// Cache directories that are rebuilt automatically and never need to be
+// synced: npm/yarn caches, editor config caches, and the dsh plugin bundle's
+// internal .cache. They bloat the bucket and slow the boot pull for nothing.
+// A rel path (relative to the workspace) or a bucket key is ignored when its
+// first segment — or the leading `.dsh/profiles/web/node_modules` segment — is
+// one of these.
+const IGNORED_PREFIXES = [
+  '.dsh/profiles/web/node_modules/.cache',
+  '.npm',
+  '.cache',
+  '.local',
+  '.config',
+];
+function shouldIgnore(rel) {
+  if (rel === READY_FILE) return true;
+  for (const p of IGNORED_PREFIXES) {
+    if (rel === p || rel.startsWith(p + '/')) return true;
+  }
+  return false;
+}
+
 async function listRemote() {
   const keys = new Map(); // key -> {size, etag}
   let token;
@@ -106,11 +136,6 @@ async function listRemote() {
   return keys;
 }
 
-// Local coordination sentinel written by the daemon after boot pull + purge;
-// never synced to the bucket (see sync-workspace.sh, which polls it).
-const READY_FILE = '.dsh-sync-ready';
-const isReadyFile = (rel) => rel === READY_FILE;
-
 async function listLocal() {
   const files = new Map(); // key -> {size, mtimeMs}
   async function walk(dir) {
@@ -120,7 +145,7 @@ async function listLocal() {
     for (const e of entries) {
       const full = join(dir, e.name);
       const relPath = relative(workspace, full);
-      if (isReadyFile(relPath)) continue;
+      if (shouldIgnore(relPath)) continue;
       if (e.isDirectory()) {
         await walk(full);
       } else if (e.isFile()) {
@@ -142,6 +167,23 @@ async function ensureLocalDir(key) {
 async function hashFile(path) {
   const buf = await readFile(path);
   return createHash('md5').update(buf).digest('hex');
+}
+
+// Run `fn` over `items` with at most `limit` concurrent invocations, in order
+// of submission. Each failure is surfaced via the returned per-item result so
+// a slow/failed item does not stall the whole batch.
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      try { results[i] = await fn(items[i], i); }
+      catch (e) { results[i] = { error: e }; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
 }
 
 async function pull(key, remoteMeta) {
@@ -191,7 +233,9 @@ async function syncOnce() {
   };
 
   // Upload: local file that's new or differs from remote (size or content).
+  // Ignored cache dirs are skipped entirely (never uploaded).
   for (const [key, l] of local) {
+    if (shouldIgnore(keyToLocal(key))) continue;
     const r = remote.get(key);
     const rHash = r ? remoteHash(r) : undefined;
     let differs = !r;
@@ -219,8 +263,9 @@ async function syncOnce() {
   }
 
   // Download: remote object missing locally, or whose content differs from
-  // the local copy (size or hash).
+  // the local copy (size or hash). Ignored cache keys are never downloaded.
   for (const [key, r] of remote) {
+    if (shouldIgnore(keyToLocal(key))) continue;
     const l = local.get(key);
     const rHash = remoteHash(r);
     let shouldPull = !l;
@@ -241,8 +286,20 @@ async function syncOnce() {
     }
   }
 
-  // Delete remote objects that no longer exist locally.
+  // Delete remote objects that no longer exist locally — including ignored
+  // cache objects that were synced up before this exclusion existed, so the
+  // bucket converges to only what the current exclusion policy keeps.
   for (const key of remote.keys()) {
+    const rel = keyToLocal(key);
+    if (shouldIgnore(rel)) {
+      // Stale ignored object: delete it from the bucket.
+      try {
+        await removeRemote(key);
+        del++;
+        dbg(`delete ${s3Url(key)} (ignored, cleaned from bucket)`);
+      } catch (e) { console.error(`s3-sync: delete ${key} failed: ${e.message}`); }
+      continue;
+    }
     if (!local.has(key)) {
       try {
         await removeRemote(key);
@@ -262,20 +319,28 @@ async function main() {
   // stale bucket object (e.g. an old settings.yaml without the thinking
   // strength selector).
   const remote = await listRemote();
-  let pulled = 0;
-  for (const [key] of remote) {
-    if (isEntrypointManaged(key)) {
-      dbg(`boot skip ${s3Url(key)} (entrypoint-managed)`);
-      continue;
-    }
-    try {
-      await pull(key);
+  // Boot pull downloads everything except entrypoint-managed files and ignored
+  // cache dirs. Ignored objects left in the bucket from before this exclusion
+  // are cleaned up by syncOnce's delete phase (see below).
+  const pullKeys = [...remote.keys()].filter((k) => !isEntrypointManaged(k) && !shouldIgnore(keyToLocal(k)));
+  log(`boot pull: ${pullKeys.length} objects to download (concurrency ${BOOT_PULL_CONCURRENCY})`);
+  // Bounded concurrency: serial downloads of thousands of objects stall on
+  // per-object network RTT. A fixed worker pool keeps throughput high without
+  // tripping S3 rate limits. Per-item failures are isolated (mapLimit).
+  const results = await mapLimit(pullKeys, BOOT_PULL_CONCURRENCY, async (key) => {
+    await pull(key);
+    dbg(`boot download ${s3Url(key)} -> ${localAbsPath(key)}`);
+  });
+  let pulled = 0, pullFail = 0;
+  for (let i = 0; i < results.length; i++) {
+    if (results[i] && results[i].error) {
+      pullFail++;
+      console.error(`s3-sync: boot pull ${pullKeys[i]} failed: ${results[i].error.message}`);
+    } else {
       pulled++;
-      dbg(`boot download ${s3Url(key)} -> ${localAbsPath(key)}`);
     }
-    catch (e) { console.error(`s3-sync: boot pull ${key} failed: ${e.message}`); }
   }
-  log(`boot pull complete (${pulled} objects) -> ${workspace}`);
+  log(`boot pull complete (${pulled} objects${pullFail ? `, ${pullFail} failed` : ''}) -> ${workspace}`);
 
   // Version-aware purge of the persisted plugin directory. The boot pull just
   // brought down the bucket's .dsh (which may include plugins a previous dsh
