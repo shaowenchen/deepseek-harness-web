@@ -66,29 +66,7 @@ const localAbsPath = (key) => join(workspace, ...keyToLocal(key).split('/'));
 // Helper: full s3 URL for a key.
 const s3Url = (key) => `s3://${bucket}/${key}`;
 
-// HOME cache dirs skipped by default; override via SYNC_EXCLUDE (comma-sep).
-// Keeps caches out of the bucket while syncing the rest of the HOME.
-const CACHE_DIRS = '.npm,.cache,.local,.config';
-const exclude = new Set(
-  (process.env.SYNC_EXCLUDE || CACHE_DIRS).split(',').map((s) => s.trim()).filter(Boolean),
-);
-
-// True when a remote key's first path segment is an excluded cache dir.
-function isExcluded(key) {
-  const rel = keyToLocal(key);
-  const top = rel.split('/')[0];
-  return exclude.has(top);
-}
-
-// Files the entrypoint regenerates on every boot (from env). The bucket may
-// hold a stale copy from an earlier run, so pulling it on boot would clobber
-// env-driven config — e.g. a changed MODEL list. Downloads skip them entirely;
-// uploads still happen, so the fresh local copy converges the bucket.
-function isEntrypointManaged(key) {
-  const rel = keyToLocal(key);
-  return rel === '.dsh/settings.yaml' || rel === '.dsh/cordis.patch.yml';
-}
-
+// Every file under the workspace (~/, /root) is synced — no exclusions.
 async function listRemote() {
   const keys = new Map(); // key -> {size, etag}
   let token;
@@ -100,7 +78,7 @@ async function listRemote() {
     });
     const res = await client.send(cmd);
     for (const o of res.Contents || []) {
-      if (!isExcluded(o.Key)) keys.set(o.Key, { size: o.Size, etag: o.ETag });
+      keys.set(o.Key, { size: o.Size, etag: o.ETag });
     }
     token = res.IsTruncated ? res.NextContinuationToken : undefined;
   } while (token);
@@ -116,7 +94,6 @@ async function listLocal() {
     for (const e of entries) {
       const full = join(dir, e.name);
       const relPath = relative(workspace, full);
-      if (exclude.has(e.name)) continue;
       if (e.isDirectory()) {
         await walk(full);
       } else if (e.isFile()) {
@@ -182,7 +159,6 @@ async function syncOnce() {
 
   // Download: remote object missing locally (and we're not just boot-pulling everything).
   for (const [key, r] of remote) {
-    if (isEntrypointManaged(key)) continue;
     const l = local.get(key);
     if (!l) {
       try {
@@ -211,15 +187,10 @@ async function syncOnce() {
 }
 
 async function main() {
-  // Boot: pull remote down first (source of truth) — except entrypoint-managed
-  // files, whose env-driven local copy must win over a stale bucket object.
+  // Boot: pull the full remote tree down first (source of truth).
   const remote = await listRemote();
   let pulled = 0;
   for (const [key] of remote) {
-    if (isEntrypointManaged(key)) {
-      dbg(`boot skip ${s3Url(key)} (entrypoint-managed)`);
-      continue;
-    }
     try {
       await pull(key);
       pulled++;

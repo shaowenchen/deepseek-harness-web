@@ -79,7 +79,6 @@ docker compose logs -f dsh-web
 | `S3_SECRET_KEY` | yes* | empty | Secret key |
 | `S3_REGION` | no | empty | e.g. `cn-beijing` |
 | `S3_PATH_STYLE` | no | `0` | `0` virtual-host style (AWS/Kingsoft); `1` path-style (MinIO/self-hosted) |
-| `SYNC_EXCLUDE` | no | `.npm,.cache,.local,.config` | Top-level HOME directories excluded from sync (comma-separated) |
 
 \* Required when `S3_BUCKET` is set.
 
