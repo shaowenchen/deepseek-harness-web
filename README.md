@@ -90,4 +90,16 @@ docker compose logs -f dsh-web
 |---|---|---|
 | `./home` | `/root` (root user's HOME) | Workspace + dsh config (`/root/.dsh`); a single mount persists everything, and with S3 configured it syncs to the bucket |
 
+## Upgrading dsh
+
+`dsh` is pinned by a single `ARG DSH_VERSION` in the `Dockerfile`. To upgrade:
+
+1. Bump `ARG DSH_VERSION` in `Dockerfile` (e.g. `0.1.2-rc.1`).
+2. Push to `master`. CI runs two automated checks **before anything is pushed**:
+   - **Smoke test** — builds the image, boots it, and waits for the healthcheck; once with env-driven `settings.yaml` (`BASE_URL` + `MODEL`) and once with a pre-seeded `.dsh/settings.yaml` to exercise the persisted-state path.
+   - **Browser-global scan** — installs `@deepseek-ai/dsh@<version>`, scans its browser bundles for references to the ES2024 `Iterator` global that older browsers lack (the class of bug behind the `0.1.5-alpha.2` "Can't find variable: Iterator" crash).
+3. If both pass, the image is built and pushed. If either fails, nothing is pushed and the upgrade is blocked.
+
+**Version-change plugin purge.** Persisted `.dsh` (bind mount or S3) can hold plugins installed by a previous dsh version that crash the new one. On version change the entrypoint (non-S3) and the sync daemon after its boot pull (S3) wipe `$DSH_HOME/profiles/web/node_modules` and record the new version in `.dsh/.dsh-web-version`, so dsh rebuilds its plugin set from the current image.
+
 Image: `shaowenchen/deepseek-harness-web:latest`

@@ -13,6 +13,27 @@ chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/.env" 2>/dev/null || true
 
 # Drop leftover auth-gate from older images if present.
 rm -rf "$DSH_HOME/profiles/web/node_modules/dsh-auth-gate"
+
+# Version-aware purge of the persisted plugin directory (non-S3 mode only).
+# $DSH_HOME/profiles is kept on disk (bind mount) across dsh upgrades; plugins
+# a previous dsh version installed there can then leak into the new one and
+# crash it (e.g. the 0.1.5-alpha.2 documentpreview loader failing with "Can't
+# find variable: Iterator"). When the recorded version differs from the image's
+# DSH_VERSION, wipe the profile's node_modules so dsh rebuilds its plugin set
+# from the current image. Same-version boots keep the directory untouched.
+# When S3 is configured, the sync daemon owns /root and applies the same purge
+# AFTER its boot pull (s3-sync.mjs), so skip it here to avoid pulling stale
+# state back down only to purge it again.
+if [ -z "${S3_BUCKET:-}" ] && [ -n "${DSH_VERSION:-}" ]; then
+  prev=$(cat "$DSH_HOME/.dsh-web-version" 2>/dev/null || true)
+  if [ "$prev" != "$DSH_VERSION" ]; then
+    if [ -n "$prev" ]; then
+      echo "entrypoint: dsh version changed ($prev -> $DSH_VERSION); purging persisted web plugins"
+    fi
+    rm -rf "$DSH_HOME/profiles/web/node_modules"
+    printf '%s\n' "$DSH_VERSION" > "$DSH_HOME/.dsh-web-version"
+  fi
+fi
 if [ -f "$DSH_HOME/.env" ]; then
   grep -v '^DSH_AUTH_TOKEN=' "$DSH_HOME/.env" > "$DSH_HOME/.env.tmp" || true
   mv "$DSH_HOME/.env.tmp" "$DSH_HOME/.env"

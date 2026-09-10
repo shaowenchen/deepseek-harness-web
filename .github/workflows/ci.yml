@@ -9,7 +9,125 @@ permissions:
   contents: read
 
 jobs:
+  # Verify the image before anything is pushed: boot the container, exercise
+  # the env-driven config path, and statically scan the dsh browser bundles for
+  # globals older browsers lack (the class of bug that crashed the UI after the
+  # 0.1.5-alpha.2 upgrade: "Can't find variable: Iterator").
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: dsh-web:verify
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test — env-generated settings (BASE_URL + MODEL)
+        run: |
+          set -eux
+          CID=$(docker run -d --name dsh-web-smoke \
+            -e API_KEY=sk-dummy \
+            -e BASE_URL=https://gateway.example/v1 \
+            -e MODEL=my-model-1,my-model-2 \
+            -e DSH_TELEMETRY_DISABLED=1 \
+            -p 3080:3080 \
+            dsh-web:verify)
+          # Wait for the container's own healthcheck to pass (start-period 60s).
+          status=starting
+          for i in $(seq 1 40); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' dsh-web-smoke 2>/dev/null || echo starting)
+            [ "$status" = "healthy" ] && break
+            sleep 5
+          done
+          echo "health status: $status"
+          [ "$status" = "healthy" ] || { echo "ERROR: env-settings boot not healthy" >&2; docker logs dsh-web-smoke 2>&1; exit 1; }
+          # The image HEALTHCHECK is the source of truth; also assert HTTP directly.
+          curl -fsS --retry 5 --retry-connrefused http://127.0.0.1:3080/ >/dev/null
+          # Assert the installed dsh version matches the Dockerfile ARG.
+          docker exec dsh-web-smoke dsh --version | grep -q "$(grep '^ARG DSH_VERSION' Dockerfile | cut -d= -f2)"
+          # env-driven config must have been written; dsh must not have failed to
+          # load plugins (the class of bug behind "Can't find variable: Iterator").
+          if docker logs dsh-web-smoke 2>&1 | grep -i "Failed to load plugins"; then
+            echo "ERROR: plugin load failure in logs" >&2
+            exit 1
+          fi
+          echo "smoke test (env settings) OK"
+          docker rm -f dsh-web-smoke >/dev/null
+
+      - name: Smoke test — pre-seeded settings.yaml (persisted-state path)
+        run: |
+          set -eux
+          mkdir -p /tmp/seeded-home/.dsh
+          cat > /tmp/seeded-home/.dsh/settings.yaml <<'EOF'
+          llm-pi-ai:
+            providers:
+              custom:
+                displayName: Custom
+                apiKeyEnv: API_KEY
+                api: openai-completions
+                baseURL: https://gateway.example/v1
+                models:
+                  - id: seeded-model
+          agent-default-model:
+            provider: custom
+            model: seeded-model
+          EOF
+          CID=$(docker run -d --name dsh-web-seeded \
+            -e API_KEY=sk-dummy \
+            -v /tmp/seeded-home:/root \
+            -p 3081:3080 \
+            dsh-web:verify)
+          for i in $(seq 1 40); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' dsh-web-seeded 2>/dev/null || echo starting)
+            [ "$status" = "healthy" ] && break
+            sleep 5
+          done
+          echo "health status: $status"
+          [ "$status" = "healthy" ] || { echo "ERROR: seeded-state boot not healthy" >&2; docker logs dsh-web-seeded 2>&1; exit 1; }
+          echo "smoke test (seeded settings) OK"
+          docker rm -f dsh-web-seeded >/dev/null
+
+      - name: Static scan — browser globals in dsh bundles
+        run: |
+          set -eux
+          DSH_VERSION=$(grep '^ARG DSH_VERSION' Dockerfile | cut -d= -f2)
+          # Scan the same bundle sources the image ships (installed fresh to
+          # avoid depending on the image's persisted .dsh).
+          mkdir -p /tmp/scan && cd /tmp/scan
+          npm init -y >/dev/null 2>&1
+          npm install --no-audit --no-fund "@deepseek-ai/dsh@${DSH_VERSION}" >/dev/null 2>&1
+          # The ES2024 Iterator global is absent in older browsers; *any*
+          # property access on it (Iterator.prototype.x) throws ReferenceError,
+          # even inside a typeof guard, because evaluating the reference itself
+          # throws. This is the exact class of bug that crashed the UI after the
+          # 0.1.5-alpha.2 upgrade ("Can't find variable: Iterator" from
+          # dsh-client-ui-sidebar-documentpreview). Bare `typeof Iterator` and
+          # Symbol.iterator / AsyncIterableIterator (type names) are safe and
+          # are NOT flagged.
+          FAIL=0
+          for pattern in 'Iterator.prototype' 'Iterator.from(' 'Iterator.helpers'; do
+            for f in $(grep -rl "$pattern" node_modules/@deepseek-ai/dsh-*/lib/client*.js 2>/dev/null || true); do
+              echo "UNGUARDABLE '${pattern}' in $f" >&2
+              FAIL=1
+            done
+          done
+          if [ "$FAIL" -ne 0 ]; then
+            echo "ERROR: dsh @${DSH_VERSION} ships browser bundles that reference the ES2024" >&2
+            echo "Iterator global, which older browsers lack — same class of bug as" >&2
+            echo "'Can't find variable: Iterator' (0.1.5-alpha.2)." >&2
+            exit 1
+          fi
+          echo "browser-global scan OK for dsh @${DSH_VERSION}"
+
   docker:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

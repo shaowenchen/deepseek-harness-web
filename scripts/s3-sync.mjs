@@ -12,9 +12,9 @@
 //            download remote objects that are new/changed vs local
 //   exit : final upload pass (SIGTERM/SIGINT via process handlers)
 import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { readdir, stat, readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
+import { readdir, stat, readFile, writeFile, mkdir, chmod, rm } from 'node:fs/promises';
 import { watch } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { join, relative, sep, dirname } from 'node:path';
 
 const workspace = process.env.DSH_WORKSPACE || '/root';
 const bucket = process.env.S3_BUCKET || '';
@@ -199,6 +199,26 @@ async function main() {
     catch (e) { console.error(`s3-sync: boot pull ${key} failed: ${e.message}`); }
   }
   log(`boot pull complete (${pulled} objects) -> ${workspace}`);
+
+  // Version-aware purge of the persisted plugin directory. The boot pull just
+  // brought down the bucket's .dsh (which may include plugins a previous dsh
+  // version installed — e.g. the 0.1.5-alpha.2 documentpreview loader that
+  // crashes the browser with "Can't find variable: Iterator"). When the
+  // recorded version differs from the image's DSH_VERSION, wipe the profile's
+  // node_modules so dsh rebuilds its plugin set from the current image.
+  // Same-version boots keep the directory untouched.
+  const dshVersion = process.env.DSH_VERSION || '';
+  if (dshVersion) {
+    const markerPath = join(workspace, '.dsh', '.dsh-web-version');
+    let prev = '';
+    try { prev = (await readFile(markerPath, 'utf8')).trim(); } catch { /* no marker yet */ }
+    if (prev !== dshVersion) {
+      if (prev) console.log(`s3-sync: dsh version changed (${prev} -> ${dshVersion}); purging persisted web plugins`);
+      await rm(join(workspace, '.dsh', 'profiles', 'web', 'node_modules'), { recursive: true, force: true });
+      await mkdir(dirname(markerPath), { recursive: true });
+      await writeFile(markerPath, `${dshVersion}\n`);
+    }
+  }
 
   // Watch workspace; debounce bursts of events, then run one sync pass.
   let dirty = false;
