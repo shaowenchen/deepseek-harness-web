@@ -125,6 +125,11 @@ llm-pi-ai:
       baseURL: $base_q
       # Provider-wide default thinking strength for every model below (off = closed).
       reasoning: off
+      # All models under this gateway declare image support. This is a claim
+      # about the endpoint, not a check: a model that actually refuses images
+      # will be rejected by the provider mid-turn. Narrow per-model with the
+      # model's 'input' field once the true vision set is known.
+      defaultInput: [text, image]
       models:$models_block
 agent-default-model:
   provider: custom
