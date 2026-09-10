@@ -69,13 +69,11 @@ if [ -z "${S3_BUCKET:-}" ]; then
   mkdir -p "$ws_path"
 fi
 
-# Preserve Docker CMD args (e.g. --port 3080).
-n=$#
-i=1
-while [ "$i" -le "$n" ]; do
-  eval "CMD_$i=\$$i"
-  i=$((i + 1))
-done
+# Preserve Docker CMD args (e.g. --port 3080). Stash each original argv entry
+# on its own line so they can be re-appended without eval — arg values (spaces,
+# quotes, metacharacters) are never re-parsed.
+cmd_args_tmp=$(mktemp)
+printf '%s\n' "$@" > "$cmd_args_tmp"
 
 set -- dsh --profile web --no-open
 
@@ -92,11 +90,11 @@ if [ -n "${TRUSTED_HOST:-}" ]; then
   IFS=$OLDIFS
 fi
 
-i=1
-while [ "$i" -le "$n" ]; do
-  eval "set -- \"\$@\" \"\$CMD_$i\""
-  i=$((i + 1))
-done
+# Append the original CMD args, one line at a time, values untouched.
+while IFS= read -r arg; do
+  set -- "$@" "$arg"
+done < "$cmd_args_tmp"
+rm -f "$cmd_args_tmp"
 
 # Restart dsh in a loop so plugin installs (which exit dsh) do not tear down
 # the container. PID 1 stays alive; SIGTERM/SIGINT forwards to the running dsh,
@@ -114,8 +112,11 @@ if [ -n "${S3_BUCKET:-}" ]; then
   while [ "$stopping" -eq 0 ]; do
     "$@" &
     dsh_pid=$!
-    wait "$dsh_pid"
-    code=$?
+    if wait "$dsh_pid"; then
+      code=0
+    else
+      code=$?
+    fi
     dsh_pid=0
     [ "$stopping" -eq 1 ] && break
     echo "dsh exited (code $code); restarting in 2s..."
@@ -129,8 +130,11 @@ trap stop_now TERM INT
 while [ "$stopping" -eq 0 ]; do
   "$@" &
   dsh_pid=$!
-  wait "$dsh_pid"
-  code=$?
+  if wait "$dsh_pid"; then
+    code=0
+  else
+    code=$?
+  fi
   dsh_pid=0
   [ "$stopping" -eq 1 ] && break
   echo "dsh exited (code $code); restarting in 2s..."

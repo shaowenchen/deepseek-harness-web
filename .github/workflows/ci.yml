@@ -32,7 +32,7 @@ jobs:
       - name: Static scan — browser globals in dsh bundles
         run: |
           set -eux
-          DSH_VERSION=$(grep '^ARG DSH_VERSION' Dockerfile | cut -d= -f2)
+          DSH_VERSION=$(grep '^ARG DSH_VERSION' Dockerfile | sed 's/.*=//; s/^[[:space:]]*//; s/[[:space:]]*$//')
           # Scan the same bundle sources the image ships (installed fresh to
           # avoid depending on the image's persisted .dsh).
           mkdir -p /tmp/scan && cd /tmp/scan
@@ -48,10 +48,10 @@ jobs:
           # are NOT flagged.
           FAIL=0
           for pattern in 'Iterator.prototype' 'Iterator.from(' 'Iterator.helpers'; do
-            for f in $(grep -rl "$pattern" node_modules/@deepseek-ai/dsh-*/lib/client*.js 2>/dev/null || true); do
+            while IFS= read -r f; do
               echo "UNGUARDABLE '${pattern}' in $f" >&2
               FAIL=1
-            done
+            done < <(grep -rl "$pattern" node_modules/@deepseek-ai/dsh-*/lib/client*.js 2>/dev/null || true)
           done
           if [ "$FAIL" -ne 0 ]; then
             echo "ERROR: dsh @${DSH_VERSION} ships browser bundles that reference the ES2024" >&2

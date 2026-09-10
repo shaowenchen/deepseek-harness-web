@@ -12,6 +12,7 @@
 //            download remote objects that are new/changed vs local
 //   exit : final upload pass (SIGTERM/SIGINT via process handlers)
 import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { createHash } from 'node:crypto';
 import { readdir, stat, readFile, writeFile, mkdir, chmod, rm } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { join, relative, sep, dirname } from 'node:path';
@@ -41,13 +42,21 @@ if (!bucket || !endpoint || !accessKey || !secretKey) {
 }
 
 // Same effective params as storage-console's createS3Client (verified on KS3).
-// forcePathStyle only for localhost/IP endpoints.
-let forcePathStyle = false;
-try {
-  const host = new URL(endpoint).hostname;
-  if (host === 'localhost' || host.endsWith('.localhost')) forcePathStyle = true;
-  else if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) forcePathStyle = true;
-} catch { forcePathStyle = true; }
+// forcePathStyle defaults to auto (localhost/IP endpoints use path-style).
+// Explicit S3_PATH_STYLE=1 forces path-style (MinIO/self-hosted); =0 forces
+// virtual-host style (AWS/Kingsoft).
+const pathStyleEnv = String(process.env.S3_PATH_STYLE || '').trim();
+let forcePathStyle;
+if (pathStyleEnv === '1') forcePathStyle = true;
+else if (pathStyleEnv === '0') forcePathStyle = false;
+else {
+  forcePathStyle = false;
+  try {
+    const host = new URL(endpoint).hostname;
+    if (host === 'localhost' || host.endsWith('.localhost')) forcePathStyle = true;
+    else if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) forcePathStyle = true;
+  } catch { forcePathStyle = true; }
+}
 
 const client = new S3Client({
   endpoint,
@@ -97,6 +106,11 @@ async function listRemote() {
   return keys;
 }
 
+// Local coordination sentinel written by the daemon after boot pull + purge;
+// never synced to the bucket (see sync-workspace.sh, which polls it).
+const READY_FILE = '.dsh-sync-ready';
+const isReadyFile = (rel) => rel === READY_FILE;
+
 async function listLocal() {
   const files = new Map(); // key -> {size, mtimeMs}
   async function walk(dir) {
@@ -106,6 +120,7 @@ async function listLocal() {
     for (const e of entries) {
       const full = join(dir, e.name);
       const relPath = relative(workspace, full);
+      if (isReadyFile(relPath)) continue;
       if (e.isDirectory()) {
         await walk(full);
       } else if (e.isFile()) {
@@ -121,6 +136,12 @@ async function listLocal() {
 async function ensureLocalDir(key) {
   const dir = join(workspace, ...keyToLocal(key).split('/').slice(0, -1));
   await mkdir(dir, { recursive: true });
+}
+
+// Content hash (md5) of a local file, used for change detection beyond size.
+async function hashFile(path) {
+  const buf = await readFile(path);
+  return createHash('md5').update(buf).digest('hex');
 }
 
 async function pull(key, remoteMeta) {
@@ -142,7 +163,10 @@ async function pull(key, remoteMeta) {
 async function push(key, localPath) {
   const data = await readFile(localPath);
   const st = await stat(localPath).catch(() => null);
-  const metadata = st ? { 'dsh-mode': (st.mode & 0o777).toString(8) } : undefined;
+  const metadata = st ? {
+    'dsh-mode': (st.mode & 0o777).toString(8),
+    'dsh-hash': createHash('md5').update(data).digest('hex'),
+  } : undefined;
   await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: data, Metadata: metadata }));
 }
 
@@ -151,14 +175,39 @@ async function removeRemote(key) {
 }
 
 // One sync pass: upload local changes, download remote changes, prune deletions.
+// Change detection: a key differs when its size differs, or — when sizes match
+// but content may have changed — when the content hash differs. Remote side
+// uses the object's ETag (single-part MD5) as its hash; local side hashes the
+// file. Same-size edits are therefore caught in both directions.
 async function syncOnce() {
   const [remote, local] = await Promise.all([listRemote(), listLocal()]);
   let up = 0, down = 0, del = 0;
 
-  // Upload: local file that's new or differs in size from remote.
+  const remoteHash = (r) => {
+    if (r?.hash) return r.hash;
+    // ETag is quoted-MD5 for single-part uploads; strip the quotes.
+    const etag = r?.etag;
+    return etag ? etag.replace(/^"|"$/g, '').toLowerCase() : undefined;
+  };
+
+  // Upload: local file that's new or differs from remote (size or content).
   for (const [key, l] of local) {
     const r = remote.get(key);
-    if (!r || r.size !== l.size) {
+    const rHash = r ? remoteHash(r) : undefined;
+    let differs = !r;
+    if (r && r.size !== l.size) differs = true;
+    else if (r && r.size === l.size) {
+      // Same size — check content hash to catch same-size edits.
+      if (rHash) {
+        try {
+          differs = (await hashFile(join(workspace, ...keyToLocal(key).split('/')))) !== rHash;
+        } catch { differs = true; }
+      }
+      // No remote hash available (multipart/unknown) — treat as differing to
+      // be safe? No: that would re-upload everything each pass. Fall back to
+      // size-only (i.e. not differing) when we can't compare content.
+    }
+    if (differs) {
       try {
         await push(key, join(workspace, ...keyToLocal(key).split('/')));
         up++;
@@ -169,10 +218,19 @@ async function syncOnce() {
     }
   }
 
-  // Download: remote object missing locally (and we're not just boot-pulling everything).
+  // Download: remote object missing locally, or whose content differs from
+  // the local copy (size or hash).
   for (const [key, r] of remote) {
     const l = local.get(key);
-    if (!l) {
+    const rHash = remoteHash(r);
+    let shouldPull = !l;
+    if (l && r.size !== l.size) shouldPull = true;
+    else if (l && r.size === l.size && rHash) {
+      try {
+        shouldPull = (await hashFile(join(workspace, ...keyToLocal(key).split('/')))) !== rHash;
+      } catch { shouldPull = false; }
+    }
+    if (shouldPull) {
       try {
         await pull(key, r);
         down++;
@@ -239,6 +297,12 @@ async function main() {
     }
   }
 
+  // Signal readiness so the entrypoint does not start dsh before the boot pull
+  // and version purge above have completed (see sync-workspace.sh which polls
+  // this sentinel). Excluded from sync by isSyncedRoot below.
+  const readyPath = join(workspace, '.dsh-sync-ready');
+  await writeFile(readyPath, `${dshVersion}\n`);
+
   // Watch workspace; debounce bursts of events, then run one sync pass.
   let dirty = false;
   let running = false;
@@ -282,7 +346,12 @@ async function main() {
   const shutdown = async () => {
     if (timer) clearTimeout(timer);
     if (watcher) try { watcher.close(); } catch {}
-    // Make sure any in-flight sync finishes; then final pass.
+    // watcher.close() is not a hard stop of the callback stream: an fs event
+    // already queued can fire scheduleSync after clearTimeout and arm a fresh
+    // timer. Drain one tick so any such timer is cleared too, then wait for an
+    // in-flight sync to finish, then do the final pass.
+    await new Promise((resolve) => setImmediate(resolve));
+    if (timer) clearTimeout(timer);
     await new Promise((resolve) => {
       const check = () => (running ? setTimeout(check, 100) : resolve());
       check();

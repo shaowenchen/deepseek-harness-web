@@ -31,12 +31,26 @@ mkdir -p "$workspace"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "sync-workspace: node not installed, skipping S3 persistence" >&2
-  return 1 2>/dev/null || exit 1
+  return 0 2>/dev/null || exit 0
 fi
 
 echo "sync-workspace: starting s3-sync daemon"
 node /opt/dsh-web/s3-sync.mjs &
 SYNC_PID=$!
+
+# Wait for the daemon's boot pull + version purge to finish (it writes
+# $workspace/.dsh-sync-ready when done) so the entrypoint does not start dsh
+# against a half-pulled or half-purged /root. Time out after 60s and proceed
+# either way — a slow/absent bucket must not block startup forever.
+i=0
+while [ ! -f "$workspace/.dsh-sync-ready" ]; do
+  i=$((i + 1))
+  if [ "$i" -ge 60 ]; then
+    echo "sync-workspace: timed out waiting for s3-sync ready (continuing)" >&2
+    break
+  fi
+  sleep 1
+done
 
 stop_sync() {
   # Graceful stop: SIGTERM makes the daemon do a final upload pass.
