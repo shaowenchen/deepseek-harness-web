@@ -83,7 +83,22 @@ for id in $MODEL; do
     first_model=$id
   fi
   models_block="${models_block}
-        - id: $(yaml_quote "$id")"
+        - id: $(yaml_quote "$id")
+          # Selectable thinking strength — all seven pi-ai levels. "off" sends
+          # no reasoning field and is the provider default (see reasoning: off
+          # below); the rest map to OpenAI-compatible wire spellings. Declaring
+          # reasoningEfforts opts this model into the selectable-thinking UI,
+          # so compat.supportsReasoningEffort is set.
+          reasoningEfforts:
+            off: null
+            minimal: minimal_effort
+            low: low_effort
+            medium: medium_effort
+            high: high_effort
+            xhigh: xhigh_effort
+            max: max_effort
+          compat:
+            supportsReasoningEffort: true"
 done
 set +f
 IFS=$old_ifs
@@ -108,6 +123,8 @@ llm-pi-ai:
       apiKeyEnv: API_KEY
       api: openai-completions
       baseURL: $base_q
+      # Provider-wide default thinking strength for every model below (off = closed).
+      reasoning: off
       models:$models_block
 agent-default-model:
   provider: custom
