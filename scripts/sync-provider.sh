@@ -83,16 +83,7 @@ for id in $MODEL; do
     first_model=$id
   fi
   models_block="${models_block}
-        - id: $(yaml_quote "$id")
-          # Selectable thinking levels -> wire spelling; a default of "medium"
-          # is declared at the provider level (reasoning: medium).
-          reasoningEfforts:
-            low: low_effort
-            medium: medium_effort
-            high: high_effort
-            max: max_effort
-          compat:
-            supportsReasoningEffort: true"
+        - id: $(yaml_quote "$id")"
 done
 set +f
 IFS=$old_ifs
@@ -117,8 +108,6 @@ llm-pi-ai:
       apiKeyEnv: API_KEY
       api: openai-completions
       baseURL: $base_q
-      # Provider-wide default thinking level for every model below.
-      reasoning: medium
       models:$models_block
 agent-default-model:
   provider: custom
