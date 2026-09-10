@@ -39,22 +39,20 @@ node /opt/dsh-web/s3-sync.mjs &
 SYNC_PID=$!
 
 # Wait for the daemon's boot pull + version purge to finish (it writes
-# $workspace/.dsh-sync-ready when done) so the entrypoint does not start dsh
-# against a half-pulled or half-purged /root. The boot pull downloads every
-# remote object, so on a large bucket it can take minutes — allow up to 5m,
-# then proceed regardless so a genuinely absent/stuck bucket never blocks
-# startup forever. If the daemon itself exits (e.g. S3 credentials rejected),
-# stop waiting immediately.
+# $workspace/.dsh-sync-ready when done) so dsh only starts against a fully
+# pulled, fully purged /root. No fixed timeout: if the daemon exits (e.g. S3
+# credentials rejected, endpoint unreachable) we stop waiting immediately, and
+# a slow but healthy boot pull simply takes as long as it takes. A heartbeat
+# line every 30s keeps the wait visible in logs.
 i=0
 while [ ! -f "$workspace/.dsh-sync-ready" ]; do
   if ! kill -0 "$SYNC_PID" 2>/dev/null; then
-    echo "sync-workspace: s3-sync daemon exited during boot pull (continuing)" >&2
+    echo "sync-workspace: s3-sync daemon exited during boot pull (continuing without it)" >&2
     break
   fi
   i=$((i + 1))
-  if [ "$i" -ge 300 ]; then
-    echo "sync-workspace: timed out after 300s waiting for s3-sync ready (continuing; boot pull may still be running)" >&2
-    break
+  if [ $((i % 30)) -eq 0 ]; then
+    echo "sync-workspace: still waiting for s3-sync boot pull (${i}s)..."
   fi
   sleep 1
 done
