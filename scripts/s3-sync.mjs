@@ -67,6 +67,18 @@ const localAbsPath = (key) => join(workspace, ...keyToLocal(key).split('/'));
 const s3Url = (key) => `s3://${bucket}/${key}`;
 
 // Every file under the workspace (~/, /root) is synced — no exclusions.
+
+// Files the entrypoint regenerates from env on every boot (sync-provider.sh
+// writes settings.yaml; entrypoint.sh copies cordis.patch.yml). The bucket may
+// hold a stale copy from an earlier run, so downloading it during the boot
+// pull could clobber the env-driven config with an older one (e.g. a settings
+// file without the current thinking-strength selector). The boot pull skips
+// these; uploads still happen, so the fresh local copy converges the bucket.
+function isEntrypointManaged(key) {
+  const rel = keyToLocal(key);
+  return rel === '.dsh/settings.yaml' || rel === '.dsh/cordis.patch.yml';
+}
+
 async function listRemote() {
   const keys = new Map(); // key -> {size, etag}
   let token;
@@ -187,10 +199,17 @@ async function syncOnce() {
 }
 
 async function main() {
-  // Boot: pull the full remote tree down first (source of truth).
+  // Boot: pull the full remote tree down first (source of truth) — except
+  // entrypoint-managed files, whose env-driven local copy must win over a
+  // stale bucket object (e.g. an old settings.yaml without the thinking
+  // strength selector).
   const remote = await listRemote();
   let pulled = 0;
   for (const [key] of remote) {
+    if (isEntrypointManaged(key)) {
+      dbg(`boot skip ${s3Url(key)} (entrypoint-managed)`);
+      continue;
+    }
     try {
       await pull(key);
       pulled++;
