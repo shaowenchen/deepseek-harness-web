@@ -249,7 +249,7 @@ async function main() {
     running = true;
     try {
       const { up, down, del } = await syncOnce();
-      if (up || down || del) log(`sync up=${up} down=${down} del=${del}`);
+      dbg(`sync up=${up} down=${down} del=${del}`);
     } catch (e) {
       console.error(`s3-sync: sync failed: ${e.message}`);
     } finally {
