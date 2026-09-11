@@ -11,9 +11,6 @@ cp /opt/dsh-web/cordis.patch.yml "$DSH_HOME/cordis.patch.yml"
 # Harden any existing sensitive files (dsh refuses 0644 credentials).
 chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/.env" 2>/dev/null || true
 
-# Drop leftover auth-gate from older images if present.
-rm -rf "$DSH_HOME/profiles/web/node_modules/dsh-auth-gate"
-
 # Version-aware purge of the persisted plugin directory (non-S3 mode only).
 # $DSH_HOME/profiles is kept on disk (bind mount) across dsh upgrades; plugins
 # a previous dsh version installed there can then leak into the new one and
@@ -33,11 +30,6 @@ if [ -z "${S3_BUCKET:-}" ] && [ -n "${DSH_VERSION:-}" ]; then
     rm -rf "$DSH_HOME/profiles/web/node_modules"
     printf '%s\n' "$DSH_VERSION" > "$DSH_HOME/.dsh-web-version"
   fi
-fi
-if [ -f "$DSH_HOME/.env" ]; then
-  grep -v '^DSH_AUTH_TOKEN=' "$DSH_HOME/.env" > "$DSH_HOME/.env.tmp" || true
-  mv "$DSH_HOME/.env.tmp" "$DSH_HOME/.env"
-  [ -s "$DSH_HOME/.env" ] || rm -f "$DSH_HOME/.env"
 fi
 
 # Official DeepSeek route: only when not using a custom BASE_URL.
