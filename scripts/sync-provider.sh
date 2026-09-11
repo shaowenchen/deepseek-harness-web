@@ -49,7 +49,10 @@ strip_keys() {
 }
 
 if [ -z "${BASE_URL:-}" ]; then
+  # No custom route: clear the managed block and any leftover llm-pi-ai /
+  # agent-default-model keys so dsh falls back to its defaults cleanly.
   strip_managed
+  strip_keys
   exit 0
 fi
 

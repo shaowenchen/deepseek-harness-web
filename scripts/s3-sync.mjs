@@ -15,7 +15,7 @@ import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand, Del
 import { createHash } from 'node:crypto';
 import { readdir, stat, readFile, writeFile, mkdir, chmod, rm } from 'node:fs/promises';
 import { watch } from 'node:fs';
-import { join, relative, sep, dirname } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 const workspace = process.env.DSH_WORKSPACE || '/root';
 const bucket = process.env.S3_BUCKET || '';
@@ -366,27 +366,13 @@ async function main() {
   }
   log(`boot pull complete (${pulled} objects${pullFail ? `, ${pullFail} failed` : ''}) -> ${workspace}`);
 
-  // Rebuild the dsh plugin runtime on every boot. .dsh/profiles is dsh-managed
-  // system state (installed plugin bundles plus the dynamic #include /
-  // #subprocess-node files dsh generates): it is rebuilt from the image's npm
-  // packages at startup, so a persisted copy adds nothing but risk — a stale
-  // profile can collide with the image's built-in services (observed: "service
-  // subprocess has been registered at <LocalSubprocessRuntime>" from a leftover
-  // #subprocess-node). Wipe it each boot so dsh always starts from a clean
-  // image state. .dsh/sessions (chat history) is deliberately kept.
-  const dshVersion = process.env.DSH_VERSION || '';
-  if (dshVersion) {
-    await rm(join(workspace, '.dsh', 'profiles'), { recursive: true, force: true });
-    const markerPath = join(workspace, '.dsh', '.dsh-web-version');
-    await mkdir(dirname(markerPath), { recursive: true });
-    await writeFile(markerPath, `${dshVersion}\n`);
-  }
+  // Wipe the dsh plugin runtime so it rebuilds from the image (see entrypoint
+  // comment). Keep .dsh/sessions (chat history).
+  await rm(join(workspace, '.dsh', 'profiles'), { recursive: true, force: true });
 
-  // Signal readiness so the entrypoint does not start dsh before the boot pull
-  // and version purge above have completed (see sync-workspace.sh which polls
-  // this sentinel). Excluded from sync by isSyncedRoot below.
-  const readyPath = join(workspace, '.dsh-sync-ready');
-  await writeFile(readyPath, `${dshVersion}\n`);
+  // Signal readiness (boot pull + wipe done) so the entrypoint waits before
+  // starting dsh; sync-workspace.sh polls this file. Excluded from sync.
+  await writeFile(join(workspace, '.dsh-sync-ready'), 'ready\n');
 
   // Watch workspace; debounce bursts of events, then run one sync pass.
   let dirty = false;

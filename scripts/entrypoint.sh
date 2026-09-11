@@ -11,22 +11,14 @@ cp /opt/dsh-web/cordis.patch.yml "$DSH_HOME/cordis.patch.yml"
 # Harden any existing sensitive files (dsh refuses 0644 credentials).
 chmod 600 "$DSH_HOME/.credentials.yaml" "$DSH_HOME/.env" 2>/dev/null || true
 
-# Rebuild the dsh plugin runtime on every boot. .dsh/profiles is dsh-managed
-# system state (installed plugin bundles plus the dynamic #include /
-# #subprocess-node files dsh generates): it is rebuilt from the image's npm
-# packages at startup, so a persisted copy adds nothing but risk — a stale
-# profile pulled across restarts can collide with the image's built-in
-# services (observed: "service subprocess has been registered at
-# <LocalSubprocessRuntime>" from a leftover #subprocess-node). Wipe it each
-# boot so dsh always starts from a clean image state. .dsh/sessions (chat
-# history) is deliberately kept, so it is not touched. When S3 is configured
-# the sync daemon owns /root and performs the same wipe after its boot pull
-# (s3-sync.mjs), so skip it here.
+# .dsh/profiles is dsh-managed runtime (plugin bundles + dynamic #include files),
+# rebuilt from the image each boot; a persisted copy can collide with the
+# image's built-in services (e.g. stale #subprocess-node → "service subprocess
+# has been registered"). Wipe it so dsh starts clean. .dsh/sessions (chat
+# history) is kept. S3 mode: the sync daemon wipes it after its boot pull, so
+# skip here.
 if [ -z "${S3_BUCKET:-}" ]; then
   rm -rf "$DSH_HOME/profiles"
-  if [ -n "${DSH_VERSION:-}" ]; then
-    printf '%s\n' "$DSH_VERSION" > "$DSH_HOME/.dsh-web-version"
-  fi
 fi
 
 # Official DeepSeek route: only when not using a custom BASE_URL.
@@ -96,25 +88,6 @@ stop_now() {
   [ "$dsh_pid" -ne 0 ] && kill -TERM "$dsh_pid" 2>/dev/null || true
 }
 
-if [ -n "${S3_BUCKET:-}" ]; then
-  trap stop_now TERM INT
-  while [ "$stopping" -eq 0 ]; do
-    "$@" &
-    dsh_pid=$!
-    if wait "$dsh_pid"; then
-      code=0
-    else
-      code=$?
-    fi
-    dsh_pid=0
-    [ "$stopping" -eq 1 ] && break
-    echo "dsh exited (code $code); restarting in 2s..."
-    sleep 2
-  done
-  exit $code
-fi
-
-# No S3: still keep PID 1 alive across dsh restarts.
 trap stop_now TERM INT
 while [ "$stopping" -eq 0 ]; do
   "$@" &
