@@ -54,9 +54,10 @@ RUN npm install --global @deepseek-ai/dsh@${DSH_VERSION} --omit=dev \
     && npm cache clean --force
 
 COPY dsh/cordis.patch.yml /opt/dsh-web/cordis.patch.yml
-COPY scripts/entrypoint.sh scripts/sync-provider.sh scripts/sync-workspace.sh scripts/s3-sync.mjs /opt/dsh-web/
-RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/sync-provider.sh /opt/dsh-web/sync-workspace.sh \
-    && mkdir -p /root/.dsh /root
+COPY scripts/entrypoint.sh scripts/dsh-restart scripts/sync-provider.sh scripts/sync-workspace.sh scripts/s3-sync.mjs /opt/dsh-web/
+RUN chmod +x /opt/dsh-web/entrypoint.sh /opt/dsh-web/dsh-restart /opt/dsh-web/sync-provider.sh /opt/dsh-web/sync-workspace.sh \
+    && mkdir -p /root/.dsh /root \
+    && ln -s /opt/dsh-web/dsh-restart /usr/local/bin/dsh-restart
 
 EXPOSE 3080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \

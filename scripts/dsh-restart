@@ -1,0 +1,61 @@
+#!/bin/sh
+# Restart dsh inside the container without restarting the container.
+#
+# The entrypoint (PID 1) keeps dsh alive in a restart loop: when the dsh child
+# exits, the loop starts it again after a short pause. So restarting dsh is
+# just "terminate the dsh child gracefully" — the entrypoint does the respawn.
+#
+# Usage:
+#   dsh-restart                  terminate dsh (SIGTERM); entrypoint respawns it
+#   dsh-restart --clean          also wipe $DSH_HOME/profiles first, so dsh
+#                                rebuilds its plugin runtime from the image.
+#                                Use after installing a plugin that broke boot,
+#                                or when profiles are stale/corrupt.
+#
+# SIGTERM lets dsh flush state and, in S3 mode, the sync daemon still runs
+# (it is a sibling of the entrypoint, not a child of dsh). No container restart.
+set -eu
+
+DSH_HOME="${DSH_HOME:-/root/.dsh}"
+
+# dsh runs as: dsh --profile web ... (the argv the entrypoint builds).
+dsh_pattern='dsh --profile web'
+
+clean=0
+if [ "${1:-}" = "--clean" ]; then
+  clean=1
+  shift
+fi
+
+find_dsh_pid() {
+  pgrep -f "$dsh_pattern" 2>/dev/null | head -n1 || true
+}
+
+if [ "$clean" -eq 1 ]; then
+  echo "dsh-restart: wiping $DSH_HOME/profiles (dsh will rebuild from the image)..."
+  rm -rf "$DSH_HOME/profiles"
+fi
+
+pid=$(find_dsh_pid)
+if [ -z "$pid" ]; then
+  echo "dsh-restart: no running dsh process found (is the entrypoint alive?)"
+  exit 1
+fi
+
+echo "dsh-restart: sending SIGTERM to dsh (pid $pid)..."
+kill -TERM "$pid"
+
+# The entrypoint waits ~2s then respawns dsh. Wait for a new dsh process.
+new_pid=""
+for i in $(seq 1 30); do
+  sleep 1
+  new_pid=$(find_dsh_pid)
+  [ -n "$new_pid" ] && [ "$new_pid" != "$pid" ] && break
+done
+
+if [ -n "$new_pid" ] && [ "$new_pid" != "$pid" ]; then
+  echo "dsh-restart: dsh is back up (pid $new_pid)."
+else
+  echo "dsh-restart: waiting for dsh to respawn... check the logs if it keeps crashing." >&2
+  exit 1
+fi
