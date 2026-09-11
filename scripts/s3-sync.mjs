@@ -104,8 +104,15 @@ const READY_FILE = '.dsh-sync-ready';
 // A rel path (relative to the workspace) or a bucket key is ignored when its
 // first segment — or the leading `.dsh/profiles/web/node_modules` segment — is
 // one of these.
+//
+// .dsh/profiles is dsh's plugin runtime (installed plugin bundles plus the
+// dynamic #include / #subprocess-node files dsh generates per boot). It is
+// rebuilt by dsh from the image's npm packages and the version-aware purge, so
+// syncing it only resurrects stale plugin state on the next boot (observed:
+// "service subprocess has been registered at <LocalSubprocessRuntime>" after a
+// restart pulled a stale #subprocess-node back down). It is not user data.
 const IGNORED_PREFIXES = [
-  '.dsh/profiles/web/node_modules/.cache',
+  '.dsh/profiles',
   '.npm',
   '.cache',
   '.local',
