@@ -82,7 +82,9 @@ docker compose logs -f dsh-web
 
 \* Required when `S3_BUCKET` is set.
 
-**How sync works.** On boot the bucket is pulled into the container workspace `/root`; afterwards the daemon watches `/root` and runs a bidirectional pass on changes — local changes upload, remote additions download, local deletions propagate back — with a final flush on graceful shutdown. No FUSE required, so it works on Railway and similar platforms.
+**How sync works.** On boot the bucket is pulled into the container workspace `/root` — but only for files missing locally, so the volume-persisted copy stays authoritative (a boot pull that overwrote live session logs is what corrupted them across restarts). Afterwards the daemon watches `/root` and runs a bidirectional pass on changes — local changes upload, remote additions download, local deletions propagate back — with a final flush on graceful shutdown. No FUSE required, so it works on Railway and similar platforms.
+
+**What is synced, what is not.** The bucket mirrors user data and durable config: the workspace (`WORKSPACE_DIR`, e.g. `default/`), files the user creates under `/root`, and chat history (`.dsh/sessions`, uploaded for backup and only pulled when missing locally — never overwritten mid-write). Everything dsh regenerates from the image is **excluded** from sync: the plugin runtime (`.dsh/profiles`), caches (`.npm`, `.cache`, `.local`, `.config`), and env/image-derived config (`settings.yaml`, `cordis.patch.yml`). Excluded objects already in the bucket are pruned by the delete phase.
 
 ## Directory layout
 
@@ -98,7 +100,7 @@ docker compose logs -f dsh-web
 2. Push to `master`. CI runs a **browser-global scan before anything is pushed** — it installs `@deepseek-ai/dsh@<version>` and scans its browser bundles for references to the ES2024 `Iterator` global that older browsers lack (the class of bug behind the `0.1.5-alpha.2` "Can't find variable: Iterator" crash).
 3. If the scan passes, the image is built and pushed. If it fails, nothing is pushed and the upgrade is blocked.
 
-**Version-change plugin purge.** Persisted `.dsh` (bind mount or S3) can hold plugins installed by a previous dsh version that crash the new one. On version change the entrypoint (non-S3) and the sync daemon after its boot pull (S3) wipe `$DSH_HOME/profiles/web/node_modules` and record the new version in `.dsh/.dsh-web-version`, so dsh rebuilds its plugin set from the current image.
+**Image-is-truth plugin runtime.** dsh's plugin runtime (`$DSH_HOME/profiles`) is rebuilt from the image on every boot — the entrypoint (non-S3) and the sync daemon after its boot pull (S3) wipe it, and dsh regenerates its plugin bundles, `cordis.patch.yml` and dynamic `#include` files from the image's npm packages. Anything installed or changed in the running container is ephemeral and gone on restart. The profile directory is excluded from S3 sync, so stale plugin state (which has caused `"service subprocess has been registered"` and missing-package crashes after upgrades) can never be pulled back. Config that must be durable comes from the environment (`settings.yaml` from `BASE_URL`/`MODEL`) or the image (`cordis.patch.yml`), not from persisted plugin state.
 
 ## Model capabilities
 
