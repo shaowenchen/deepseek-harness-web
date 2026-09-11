@@ -27,8 +27,9 @@ const secretKey = (process.env.S3_SECRET_KEY || '').trim();
 const debounceMs = 500;
 // How many objects to download in parallel during the boot pull. Serial pulls
 // of thousands of objects stall on per-object network RTT; a bounded pool keeps
-// throughput high without tripping S3 rate limits.
-const BOOT_PULL_CONCURRENCY = 16;
+// throughput high without tripping S3 rate limits. Configurable via
+// BOOT_PULL_CONCURRENCY (default 32).
+const BOOT_PULL_CONCURRENCY = Math.max(1, parseInt(process.env.BOOT_PULL_CONCURRENCY || '32', 10) || 32);
 const isDebug = (process.env.LOG_LEVEL || '').toLowerCase() === 'debug';
 
 // info level (default): lifecycle + per-pass sync counts only.
@@ -103,16 +104,8 @@ const READY_FILE = '.dsh-sync-ready';
 // A rel path (relative to the workspace) or a bucket key is ignored when its
 // first segment — or the leading `.dsh/profiles/web/node_modules` segment — is
 // one of these.
-//
-// Also ignored: dsh's own live runtime state under $DSH_HOME (.dsh/sessions,
-// .dsh/storages). These are append-heavy files dsh writes continuously; a sync
-// download that overwrites them with an older copy mid-write corrupts them
-// (e.g. "corrupt session log: seq gap"). They are meant to persist via the
-// bind mount / volume, not the bucket.
 const IGNORED_PREFIXES = [
   '.dsh/profiles/web/node_modules/.cache',
-  '.dsh/sessions',
-  '.dsh/storages',
   '.npm',
   '.cache',
   '.local',
@@ -322,16 +315,22 @@ async function syncOnce() {
 }
 
 async function main() {
-  // Boot: pull the full remote tree down first (source of truth) — except
-  // entrypoint-managed files, whose env-driven local copy must win over a
-  // stale bucket object (e.g. an old settings.yaml without the thinking
-  // strength selector).
-  const remote = await listRemote();
-  // Boot pull downloads everything except entrypoint-managed files and ignored
-  // cache dirs. Ignored objects left in the bucket from before this exclusion
-  // are cleaned up by syncOnce's delete phase (see below).
-  const pullKeys = [...remote.keys()].filter((k) => !isEntrypointManaged(k) && !shouldIgnore(keyToLocal(k)));
-  log(`boot pull: ${pullKeys.length} objects to download (concurrency ${BOOT_PULL_CONCURRENCY})`);
+  // Boot: pull the full remote tree down first — but only for files missing
+  // locally. The workspace is bind-mounted/volume-persisted, so a file that
+  // already exists locally is the authoritative, newer copy (e.g. a session
+  // log dsh is still appending to, or a config the entrypoint regenerated).
+  // Overwriting it with a stale bucket object — the boot pull's old behavior —
+  // is what corrupted session logs across restarts ("corrupt session log: seq
+  // gap"). The bucket is therefore a recovery source for missing files, not a
+  // competing copy of existing ones. Entrypoint-managed files and ignored
+  // cache dirs are skipped as before.
+  const [remote, local] = await Promise.all([listRemote(), listLocal()]);
+  const pullKeys = [...remote.keys()].filter(
+    (k) => !isEntrypointManaged(k)
+      && !shouldIgnore(keyToLocal(k))
+      && !local.has(k)
+  );
+  log(`boot pull: ${pullKeys.length} objects to download (${remote.size} remote, concurrency ${BOOT_PULL_CONCURRENCY})`);
   // Bounded concurrency: serial downloads of thousands of objects stall on
   // per-object network RTT. A fixed worker pool keeps throughput high without
   // tripping S3 rate limits. Per-item failures are isolated (mapLimit).
