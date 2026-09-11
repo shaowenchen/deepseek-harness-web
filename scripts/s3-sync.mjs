@@ -265,9 +265,19 @@ async function syncOnce() {
 
   // Download: remote object missing locally, or whose content differs from
   // the local copy (size or hash). Ignored cache keys are never downloaded.
+  // dsh's live runtime state (.dsh/sessions, .dsh/storages) is never
+  // overwritten: those files are append-only and the local copy is always the
+  // authoritative, newer one — a download overwriting them mid-write (or with
+  // the previous run's backup) is what corrupts session logs. They are only
+  // pulled when missing locally (recovery on a fresh volume).
+  const isRuntimeState = (rel) =>
+    rel === '.dsh/sessions' || rel.startsWith('.dsh/sessions/') ||
+    rel === '.dsh/storages' || rel.startsWith('.dsh/storages/');
   for (const [key, r] of remote) {
-    if (shouldIgnore(keyToLocal(key))) continue;
+    const rel = keyToLocal(key);
+    if (shouldIgnore(rel)) continue;
     const l = local.get(key);
+    if (isRuntimeState(rel) && l) continue; // local exists → never overwrite
     const rHash = remoteHash(r);
     let shouldPull = !l;
     if (l && r.size !== l.size) shouldPull = true;
