@@ -366,24 +366,20 @@ async function main() {
   }
   log(`boot pull complete (${pulled} objects${pullFail ? `, ${pullFail} failed` : ''}) -> ${workspace}`);
 
-  // Version-aware purge of the persisted plugin directory. The boot pull just
-  // brought down the bucket's .dsh (which may include plugins a previous dsh
-  // version installed — e.g. the 0.1.5-alpha.2 documentpreview loader that
-  // crashes the browser with "Can't find variable: Iterator"). When the
-  // recorded version differs from the image's DSH_VERSION, wipe the profile's
-  // node_modules so dsh rebuilds its plugin set from the current image.
-  // Same-version boots keep the directory untouched.
+  // Rebuild the dsh plugin runtime on every boot. .dsh/profiles is dsh-managed
+  // system state (installed plugin bundles plus the dynamic #include /
+  // #subprocess-node files dsh generates): it is rebuilt from the image's npm
+  // packages at startup, so a persisted copy adds nothing but risk — a stale
+  // profile can collide with the image's built-in services (observed: "service
+  // subprocess has been registered at <LocalSubprocessRuntime>" from a leftover
+  // #subprocess-node). Wipe it each boot so dsh always starts from a clean
+  // image state. .dsh/sessions (chat history) is deliberately kept.
   const dshVersion = process.env.DSH_VERSION || '';
   if (dshVersion) {
+    await rm(join(workspace, '.dsh', 'profiles'), { recursive: true, force: true });
     const markerPath = join(workspace, '.dsh', '.dsh-web-version');
-    let prev = '';
-    try { prev = (await readFile(markerPath, 'utf8')).trim(); } catch { /* no marker yet */ }
-    if (prev !== dshVersion) {
-      if (prev) console.log(`s3-sync: dsh version changed (${prev} -> ${dshVersion}); purging persisted web plugins`);
-      await rm(join(workspace, '.dsh', 'profiles', 'web', 'node_modules'), { recursive: true, force: true });
-      await mkdir(dirname(markerPath), { recursive: true });
-      await writeFile(markerPath, `${dshVersion}\n`);
-    }
+    await mkdir(dirname(markerPath), { recursive: true });
+    await writeFile(markerPath, `${dshVersion}\n`);
   }
 
   // Signal readiness so the entrypoint does not start dsh before the boot pull
