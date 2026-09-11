@@ -103,8 +103,16 @@ const READY_FILE = '.dsh-sync-ready';
 // A rel path (relative to the workspace) or a bucket key is ignored when its
 // first segment — or the leading `.dsh/profiles/web/node_modules` segment — is
 // one of these.
+//
+// Also ignored: dsh's own live runtime state under $DSH_HOME (.dsh/sessions,
+// .dsh/storages). These are append-heavy files dsh writes continuously; a sync
+// download that overwrites them with an older copy mid-write corrupts them
+// (e.g. "corrupt session log: seq gap"). They are meant to persist via the
+// bind mount / volume, not the bucket.
 const IGNORED_PREFIXES = [
   '.dsh/profiles/web/node_modules/.cache',
+  '.dsh/sessions',
+  '.dsh/storages',
   '.npm',
   '.cache',
   '.local',
